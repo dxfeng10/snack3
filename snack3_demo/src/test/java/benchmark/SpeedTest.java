@@ -1,4 +1,4 @@
-package speed;
+package benchmark;
 
 import _models.UserGroupModel;
 import _models.UserModel;
@@ -29,8 +29,8 @@ public class SpeedTest {
         long start = System.currentTimeMillis();
 
         for (int i = 0; i < 10000; i++) {
-//            c.handle(handler);
-            ONode.load(c.source);
+            c.handle(handler);
+            //ONode.load(c.source);
 
             //assert "1".equals(c.node.get("data").get("list").get(0).get("id").getString());
         }
@@ -42,7 +42,7 @@ public class SpeedTest {
     /** 测试性能（小json） */
     @Test
     public void test0() throws Exception {
-        //100000=>950,931,939
+        //100000=>950,931,939    //100=>.95
         //
         //1kb
         //

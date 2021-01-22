@@ -5,6 +5,7 @@ import org.noear.snack.OValue;
 import org.noear.snack.OValueType;
 import org.noear.snack.core.exts.*;
 import org.noear.snack.core.utils.IOUtil;
+import org.noear.snack.core.utils.StringUtil;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -631,6 +632,26 @@ public class JsonPath {
         return tmp2;
     };
 
+    private static Fun4<ONode,Segment,ONode,ONode,Boolean> handler_ary_ref=(s, root, tmp, usd)-> {
+        ONode tmp2 = null;
+
+        if(tmp.isObject()) {
+            if (s.cmdAry.startsWith("$")) {
+                tmp2 = do_get(root, s.cmdAry, true, usd);
+            } else {
+                tmp2 = do_get(tmp, s.cmdAry, true, usd);
+            }
+
+            if (tmp2.isValue()) {
+                tmp2 = tmp.get(tmp2.getString());
+            }else{
+                tmp2 = null;
+            }
+        }
+
+        return tmp2;
+    };
+
     private static Fun4<ONode,Segment,ONode,ONode,Boolean> handler_ary_multi=(s, root, tmp, usd)->{
         ONode tmp2 = null;
 
@@ -644,6 +665,22 @@ public class JsonPath {
                         }
 
                         tmp2.addNode(n1);
+                    }
+                }
+            }
+
+            //不知道，该不访加::??
+            if(tmp.isArray()) {
+                tmp2 = new ONode(tmp.cfg()).asArray();
+
+                for(ONode tmp1 : tmp.ary()){
+                    if(tmp1.isObject()){
+                        for (String k : s.nameS) {
+                            ONode n1 = tmp1.obj().get(k);
+                            if (n1 != null) {
+                                tmp2.addNode(n1);
+                            }
+                        }
                     }
                 }
             }
@@ -701,7 +738,25 @@ public class JsonPath {
     private static Fun4<ONode,Segment,ONode,ONode,Boolean> handler_ary_prop=(s, root, tmp, usd)-> {
         //如果是value,会返回null
         if (s.cmdHasQuote) {
-            return tmp.getOrNull(s.name);
+            if(tmp.isObject()) {
+                return tmp.getOrNull(s.name);
+            }
+
+            //不知道，该不访加::??
+            if(tmp.isArray()) {
+                ONode tmp2 = new ONode(tmp.cfg()).asArray();
+                for (ONode n1 : tmp.ary()) {
+                    if (n1.isObject()) {
+                        ONode n2 = n1.nodeData().object.get(s.name);
+                        if (n2 != null) {
+                            tmp2.add(n2);
+                        }
+                    }
+                }
+                return tmp2;
+            }
+
+            return null;
         } else {
             if (s.start < 0) {
                 return tmp.getOrNull(tmp.count() + s.start);//倒数位
@@ -780,7 +835,7 @@ public class JsonPath {
                 } else {
                     if (cmdAry.indexOf("'") >= 0) {
                         name = cmdAry.substring(1, cmdAry.length() - 1);
-                    } else if (cmdAry.equals("*") == false) {
+                    } else if (StringUtil.isInteger(cmdAry)) {
                         start = Integer.parseInt(cmdAry);
                     }
                 }
@@ -828,6 +883,9 @@ public class JsonPath {
                     //[2:4]
                     handler = handler_ary_range;
 
+                } else if(this.cmdAry.startsWith("$.") || this.cmdAry.startsWith("@.")){
+                    //[$.xxx] [@.xxx]
+                    handler = handler_ary_ref;
                 } else {
                     //[x]指令
                     //

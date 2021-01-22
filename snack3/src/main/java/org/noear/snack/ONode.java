@@ -1,14 +1,13 @@
 package org.noear.snack;
 
-import org.noear.snack.core.Context;
-import org.noear.snack.core.JsonPath;
+import org.noear.snack.core.*;
 import org.noear.snack.core.exts.Act1;
 import org.noear.snack.core.exts.Act2;
-import org.noear.snack.core.Constants;
-import org.noear.snack.core.DEFAULTS;
+import org.noear.snack.core.utils.BeanUtil;
 import org.noear.snack.from.Fromer;
 import org.noear.snack.to.Toer;
 
+import java.lang.reflect.Type;
 import java.math.BigDecimal;
 import java.util.*;
 import java.util.function.BiConsumer;
@@ -29,7 +28,7 @@ public class ONode {
      * @return 版本信息
      */
     public static String version() {
-        return "3.1.4";
+        return "3.1.12";
     }
 
     public ONode() {
@@ -45,6 +44,18 @@ public class ONode {
         }else {
             _c = cfg;
         }
+    }
+
+    public static ONode newValue(){
+        return new ONode().asValue();
+    }
+
+    public static ONode newObject(){
+        return new ONode().asObject();
+    }
+
+    public static ONode newArray(){
+        return new ONode().asArray();
     }
 
 
@@ -184,6 +195,9 @@ public class ONode {
         } else if (val instanceof ONode) { //支持数据直接copy
             _d.tryInitNull();
             _d = ((ONode) val)._d;
+        } else if (val instanceof Map || val instanceof Collection) {
+            _d.tryInitNull();
+            _d = buildVal(val)._d;
         } else {
             _d.tryInitValue();
             _d.value.set(val);
@@ -411,6 +425,10 @@ public class ONode {
      * @return child:ONode
      */
     public ONode get(String key) {
+        return getOrNew(key);
+    }
+
+    public ONode getOrNew(String key) {
         _d.tryInitObject();
 
         ONode tmp = _d.object.get(key);
@@ -450,6 +468,21 @@ public class ONode {
         return tmp;
     }
 
+    private ONode buildVal(Object val) {
+        if (val instanceof Map) {
+            return new ONode(_c).setAll((Map<String, ?>) val);
+        } else if (val instanceof Collection) {
+            return new ONode(_c).addAll((Collection<?>) val);
+        } else {
+            //可能会影响性能...
+            //
+            if (val != null && val.getClass().isArray()) {
+                return new ONode(_c).addAll(Arrays.asList((Object[]) val));
+            }
+            return new ONode(_c).val(val);
+        }
+    }
+
     /**
      * 设置对象的子节点（会自动处理类型）
      *
@@ -462,14 +495,14 @@ public class ONode {
         if (val instanceof ONode) {
             _d.object.put(key, ((ONode) val));
         } else {
-            _d.object.put(key, new ONode(_c).val(val));
+            _d.object.put(key, buildVal(val));
         }
 
         return this;
     }
 
     /**
-     * 设置对象的子节点，值为ONode类型
+     * 设置对象的子节点，值为ONode类型 (需要在外部初始化类型)
      *
      * @return self:ONode
      */
@@ -565,6 +598,21 @@ public class ONode {
         return new ONode();
     }
 
+    public ONode getOrNew(int index) {
+        _d.tryInitArray();
+
+        if (_d.array.size() > index) {
+            return _d.array.get(index);
+        } else {
+            ONode n = null;
+            for (int i = _d.array.size(); i <= index; i++) {
+                n = new ONode(_c);
+                _d.array.add(n);
+            }
+            return n;
+        }
+    }
+
     /**
      * 获取数组子节点（超界，返回null）
      *
@@ -613,14 +661,14 @@ public class ONode {
         if (val instanceof ONode) {
             _d.array.add((ONode) val);
         } else {
-            _d.array.add(new ONode(_c).val(val));
+            _d.array.add(buildVal(val));
         }
 
         return this;
     }
 
     /**
-     * 添加数组子节点，值为ONode类型
+     * 添加数组子节点，值为ONode类型 (需要在外部初始化类型)
      *
      * @return self:ONode
      */
@@ -794,14 +842,37 @@ public class ONode {
      * clz = Object.class   => auto type
      * clz = null           => Map or List or Value
      */
-    public <T> T toObject(Class<?> clz) {
+    public <T> T toObject(Type clz) {
         return to(DEFAULTS.DEF_OBJECT_TOER, clz);
+    }
+
+
+    /**
+     * 将当前ONode 转为 java list
+     *
+     * clz = XxxModel.class => XxxModel
+     * clz = Object.class   => auto type
+     * clz = null           => Map or List or Value
+     */
+    public<T> List<T> toObjectList(Class<T> clz){
+        List<T> list = new ArrayList<>();
+
+        for(ONode n: ary()){
+            list.add(n.toObject(clz));
+        }
+
+        return list;
+    }
+
+    @Deprecated
+    public<T> List<T> toArray(Class<T> clz){
+        return toObjectList(clz);
     }
 
     /**
      * 将当前ONode 通过 toer 进行转换
      */
-    public <T> T to(Toer toer, Class<?> clz) {
+    public <T> T to(Toer toer, Type clz) {
         return (T) (new Context(_c, this, clz).handle(toer).target);
     }
     public <T> T to(Toer toer) {
@@ -820,16 +891,18 @@ public class ONode {
         return this;
     }
 
-    /**
-     * @param fromer 来源处理器
-     * */
-    public ONode fill(Object source,  Fromer fromer) {
-        val(doLoad(source, source instanceof String, _c, fromer));
+    public ONode fill(Object source,  Feature... features) {
+        val(doLoad(source, source instanceof String, Constants.def().add(features), null));
         return this;
     }
 
-    public ONode fillObj(Object source, Constants cfg) {
-        val(doLoad(source, false, cfg, null));
+    public ONode fillObj(Object source, Feature... features) {
+        val(doLoad(source, false, Constants.def().add(features), null));
+        return this;
+    }
+
+    public ONode fillStr(String source, Feature... features) {
+        val(doLoad(source, true, Constants.def().add(features), null));
         return this;
     }
 
@@ -846,7 +919,14 @@ public class ONode {
      * @return new:ONode
      */
     public static ONode load(Object source) {
-        return load(source,null);
+        return load(source, null, null);
+    }
+
+    /**
+     * @param features 特性
+     * */
+    public static ONode load(Object source, Feature... features) {
+        return load(source, Constants.def().add(features), null);
     }
 
     /**
@@ -855,6 +935,8 @@ public class ONode {
     public static ONode load(Object source, Constants cfg) {
         return load(source, cfg, null);
     }
+
+
 
     /**
      * @param fromer 来源处理器
@@ -870,11 +952,19 @@ public class ONode {
         return doLoad(source, true, null, null);
     }
 
+    public static ONode loadStr(String source, Constants cfg) {
+        return doLoad(source, true, cfg, null);
+    }
+
+    public static ONode loadStr(String source, Feature... features) {
+        return doLoad(source, true, Constants.def().add(features), null);
+    }
+
     /**
      * 加载java object并生成新节点
      * */
     public static ONode loadObj(Object source) {
-        return loadObj(source, null);
+        return doLoad(source, false, null, null);
     }
 
     //loadStr 不需要 cfg
@@ -882,16 +972,22 @@ public class ONode {
         return doLoad(source, false, cfg, null);
     }
 
+    public static ONode loadObj(Object source, Feature... features) {
+        return doLoad(source, false, Constants.def().add(features), null);
+    }
+
+
+
     private static ONode doLoad(Object source, boolean isString, Constants cfg, Fromer fromer) {
         if (fromer == null) {
-            if(isString) {
+            if (isString) {
                 fromer = DEFAULTS.DEF_STRING_FROMER;
-            }else{
+            } else {
                 fromer = DEFAULTS.DEF_OBJECT_FROMER;
             }
         }
 
-        if(cfg == null){
+        if (cfg == null) {
             cfg = Constants.def();
         }
 
@@ -959,10 +1055,11 @@ public class ONode {
      * @param source string
      * @throws Exception
      */
-    public static <T> T deserialize(String source, Class<?> clz) {
+    public static <T> T deserialize(String source, Type clz) {
         //加载String，不需指定Fromer
         return load(source,  Constants.serialize(), null).toObject(clz);
     }
+
 
     @Override
     public boolean equals(Object o) {

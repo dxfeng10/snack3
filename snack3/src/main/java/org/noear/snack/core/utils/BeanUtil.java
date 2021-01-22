@@ -8,6 +8,8 @@ import java.lang.reflect.Modifier;
 import java.sql.Clob;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.BiConsumer;
+import java.util.function.Predicate;
 
 /**
  * Bean工具类
@@ -31,55 +33,6 @@ public class BeanUtil {
 
     /////////////////
 
-    /**  */
-    private static transient final Map<String,Collection<FieldWrap>> fieldsCached = new HashMap<>();
-
-    /** 获取一个类的所有字段 （已实现缓存） */
-    public static Collection<FieldWrap> getAllFields(Class<?> clz) {
-        String key = clz.getName();
-
-        Collection<FieldWrap> list = fieldsCached.get(key);
-        if (list == null) {
-            synchronized (key.intern()) {
-                list = fieldsCached.get(key);
-
-                if (list == null) {
-                    Map<String, FieldWrap> map = new LinkedHashMap<>();
-                    scanAllFields(clz, map);
-
-                    list = map.values();
-
-                    fieldsCached.put(key, list);
-                }
-            }
-        }
-
-        return list;
-    }
-
-    /** 扫描一个类的所有字段 */
-    private static void scanAllFields(Class<?> clz, Map<String,FieldWrap> fields) {
-        if(clz == null){
-            return;
-        }
-
-        for (Field f : clz.getDeclaredFields()) {
-            int mod = f.getModifiers();
-
-            if (!Modifier.isTransient(mod) && !Modifier.isStatic(mod)) {
-                f.setAccessible(true);
-
-                if(fields.containsKey(f.getName()) == false){
-                    fields.put(f.getName(),new FieldWrap(f));
-                }
-            }
-        }
-
-        Class<?> sup = clz.getSuperclass();
-        if (sup != Object.class) {
-            scanAllFields(sup, fields);
-        }
-    }
 
     /** 将 Clob 转为 String */
     public static String clobToString(Clob clob) {
@@ -113,5 +66,13 @@ public class BeanUtil {
         }
 
         return text;
+    }
+
+    public static Object newInstance(Class<?> clz) {
+        try {
+            return clz.newInstance();
+        } catch (Exception ex) {
+            throw new RuntimeException("create instance error, class " + clz.getName());
+        }
     }
 }

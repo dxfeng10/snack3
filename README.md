@@ -4,7 +4,7 @@
 ` QQ交流群：22200020 `
 
 # Snack3 for java
-一个微型JSON框架
+一个微型JSON + Jsonpath框架
 
 基于jdk8，70kb。有序列化反序列化、解析和转换、支持 Json path 查询。
 
@@ -12,7 +12,7 @@
 <dependency>
   <groupId>org.noear</groupId>
   <artifactId>snack3</artifactId>
-  <version>3.1.6.3</version>
+  <version>3.1.13</version>
 </dependency>
 ```
 
@@ -39,27 +39,28 @@ UserModel user = ONode.deserialize(json);
 UserModel user = ONode.deserialize(json, UserModel.class); 
 // -- json 可以不带@type，泛型方式输出（类型是已知的）
 List<UserModel> list = ONode.deserialize(json, (new ArrayList<UserModel>(){}).getClass()); 
-// -- json 可以不带@type，泛型方式输出（类型是未知的）
-public <T> T getObject(String json){
-    return ONode.deserialize(json, (new TypeRef<T>(){}).getClass()); 
-}
 
 //demo3::转为ONode
-ONode o = ONode.load(json); //将json String 转为 ONode
-ONode o = ONode.load(user); //将java Object 转为 ONode
+ONode o = ONode.loadStr(json); //将json String 转为 ONode
+ONode o = ONode.loadObj(user); //将java Object 转为 ONode
+
+//demo3.1::转为ONode，取子节点进行序列化
+ONode o = ONode.loadStr(json);
+UserModel user = o.get("user").toObject(UserModel.class);
+
 
 //demo4:构建json数据(极光推送的rest api调用)
 public static void push(Collection<String> alias_ary, String text)  {
     ONode data = new ONode().build((d)->{
-        d.get("platform").val("all");
+        d.getOrNew("platform").val("all");
 
-        d.get("audience").get("alias").addAll(alias_ary);
+        d.getOrNew("audience").getOrNew("alias").addAll(alias_ary);
 
-        d.get("options")
+        d.getOrNew("options")
                 .set("apns_production",false);
 
-        d.get("notification").build(n->{
-            n.get("ios")
+        d.getOrNew("notification").build(n->{
+            n.getOrNew("ios")
                     .set("alert",text)
                     .set("badge",0)
                     .set("sound","happy");
@@ -100,10 +101,10 @@ List<String> list = o.select("$..mobile").toObject(List.class);
 List<String> list = o.select("$.data.list[*].mobile").toObject(List.class);
 //找到187手机号的用户，并输出List<UserModel>
 List<UserModel> list = o.select("$.data.list[?(@.mobile =~ /^187/)]")
-                        .toObject((new ArrayList<UserModel>(){}).getClass());
+                        .toObjectList(UserModel.class);
 //或
 List<UserModel> list = o.select("$.data.list[?(@.mobile =~ /^187/)]")
-                        .toObject((new TypeRef<List<UserModel>>(){}).getClass());
+                        .toObjectList(UserModel.class);
 
 
 //demo7:遍历
@@ -131,12 +132,16 @@ XxxModel m =tmp.toObject(XxxModel.class);
 ```
 
 ## 关于序列化的特点
-#### 对象（与fastJson一致）
+#### 对象（可以带type）
 ```json
+{"a":1,"b":"2"}
+//或
 {"@type":"...","a":1,"b":"2"}
 ```
-#### 数组（与fastJson不同，可以精准反序列化类型；需要特性开启）
+#### 数组（可以带type）
 ```json
+[1,2,3]
+//或
 [{"@type":"..."},[1,2,3]]
 ```
 
@@ -156,7 +161,7 @@ XxxModel m =tmp.toObject(XxxModel.class);
 | `[start:end]`	| 数组片段，区间为\[start,end),不包含end（负号为倒数） |
 | `[?(<expression>)]`	| 过滤表达式。 表达式结果必须是一个布尔值。 |
 
-| 支持过滤操作符 |	说明 |
+| 支持过滤操作符(操作符两边要加空隔) |	说明 |
 | --- | --- |
 | `==`	| left等于right（注意1不等于'1'） |
 | `!=`	| 不等于 |
@@ -181,6 +186,12 @@ XxxModel m =tmp.toObject(XxxModel.class);
 
 # Snack3 接口字典
 ```swift
+//快捷构建
+//
++newValue()  -> new:ONode 创建值类型节点
++newObject() -> new:ONode 创建对象类型节点
++newArray()  -> new:ONode 创建数组类型节点
+
 //初始化操作
 //
 -asObject() -> self:ONode  //将当前节点切换为对象
@@ -208,9 +219,9 @@ XxxModel m =tmp.toObject(XxxModel.class);
 -select(jpath:String, useStandard:boolean)-> new:ONode  //useStandard:使用标准模式,默认非标准
 -select(jpath:String, useStandard:boolean, cacheJpath:boolean)-> new:ONode   //cacheJpath:是否缓存javaPath编译成果，默认缓存
 
--clear()        //清除子节点，对象或数组有效
--count() -> int //子节点数量，对象或数组有效
-
+-clear()                    //清除子节点，对象或数组有效
+-count() -> int             //子节点数量，对象或数组有效
+-readonly() -> self:ONode   //只读形态（get时，不添加子节点）
 
 //值操作
 //
@@ -230,14 +241,14 @@ XxxModel m =tmp.toObject(XxxModel.class);
 //对象操作
 //
 -obj() -> Map<String,ONode>                     //获取节点对象数据结构体（如果不是对象类型，会自动转换）
--readonly() -> self:ONode                       //只读形态（get时，不添加子节点）
 -contains(key:String) -> bool                   //是否存在对象子节点?
 -rename(key:String,newKey:String) -> self:ONode //重命名子节点并返回自己
 -get(key:String) -> child:ONode                 //获取对象子节点（不存在，生成新的子节点并返回）
+-getOrNew(key:String) -> child:ONode            //获取对象子节点（不存在，生成新的子节点并返回）
 -getOrNull(key:String) -> child:ONode           //获取对象子节点（不存在，返回null）
 -getNew(key:String) -> child:ONode              //生成新的对象子节点，会清除之前的数据
 -set(key:String,val:Object) -> self:ONode           //设置对象的子节点（会自动处理类型）
--setNode(key:String,val:ONode) -> self:ONode        //设置对象的子节点，值为ONode类型
+-setNode(key:String,val:ONode) -> self:ONode        //设置对象的子节点，值为ONode类型（需要在外部初始化类型，建议用set(k,v)）
 -setAll(obj:ONode) -> self:ONode                    //设置对象的子节点，将obj的子节点搬过来
 -setAll(map:Map<String,T>) ->self:ONode             //设置对象的子节点，将map的成员搬过来
 -setAll(map:Map<String,T>, (n,t)->..) ->self:ONode  //设置对象的子节点，将map的成员搬过来，并交由代理处置
@@ -248,10 +259,11 @@ XxxModel m =tmp.toObject(XxxModel.class);
 //
 -ary() -> List<ONode>                   //获取节点数组数据结构体（如果不是数组，会自动转换）
 -get(index:int)  -> child:ONode                 //获取数组子节点（超界，返回空节点）
+-getOrNew(index:int)  -> child:ONode            //获取数组子节点（不存在，生成新的子节点并返回）
 -getOrNull(index:int)  -> child:ONode           //获取数组子节点（超界，返回null）
 -addNew() -> child:ONode                        //生成新的数组子节点
 -add(val) -> self:ONode                         //添加数组子节点 //val:为常规类型或ONode
--addNode(val:ONode) -> self:ONode               //添加数组子节点，值为ONode类型
+-addNode(val:ONode) -> self:ONode               //添加数组子节点，值为ONode类型（需要在外部初始化类型，建议用add(v)）
 -addAll(ary:ONode)  -> self:ONode               //添加数组子节点，将ary的子节点搬过来
 -addAll(ary:Collection<T>) -> self:ONode                //添加数组子节点，将ary的成员点搬过来
 -addAll(ary:Collection<T>,(n,t)->..) -> self:ONode      //添加数组子节点，将ary的成员点搬过来，并交由代理处置
@@ -266,17 +278,20 @@ XxxModel m =tmp.toObject(XxxModel.class);
 
 //转换操作
 //
--toString() -> String           //转为string （由字符串转换器决定，默认为json）
--toJson() -> String             //转为json string
--toData() -> Object 			//转为数据结构体（Map,List,Value）
--toObject(clz:Class<T>) -> T    //转为java object（clz=Object.class：自动输出类型）
+-toString() -> String               //转为string （由字符串转换器决定，默认为json）
+-toJson() -> String                 //转为json string
+-toData() -> Object 			    //转为数据结构体（Map,List,Value）
+-toObject(clz:Class<T>) -> T        //转为java object（clz=Object.class：自动输出类型）
+-toObjectList(clz:Class<T>) -> List<T>   //转为java list
 
 -to(toer:Toer, clz:Class<T>) -> T   //将当前节点通过toer进行转换
 -to(toer:Toer) -> T                 //将当前节点通过toer进行转换
 
 //填充操作（为当前节点填充数据；source 为 String 或 java object）
--fill(source:Object)    -> self:ONode               //填充数据
--fill(source:Object, fromer:Fromer) -> self:ONode   //填充数据，由fromer决定处理
+-fill(source:Object)    -> self:ONode  //填充数据
+-fill(source:Object, Feature... features)    -> self:ONode //填充数据
+-fillObj(source:Object, Feature... features)    -> self:ONode //填充数据
+-fillStr(source:String, Feature... features)    -> self:ONode //填充数据
 
 /**
  * 以下为静态操作
@@ -285,13 +300,16 @@ XxxModel m =tmp.toObject(XxxModel.class);
 //加载操作（source 为 String 或 java object）
 //
 +load(source:Object) -> new:ONode    //加载数据
++load(source:Object, Feature... features) -> new:ONode
 +load(source:Object, cfg:Constants) -> new:ONode
 +load(source:Object, cfg:Constants, fromer:Fromer) -> new:ONode
 
 //加载 string
 +loadStr(source:String) -> new:ONode	//仅String
++loadStr(source:String, Feature... features) -> new:ONode	//仅String
 //加载 java object
 +loadObj(source:Object) -> new:ONode	//仅java object
++loadObj(source:Object, Feature... features) -> new:ONode	//仅java object
 
 //字符串化操作
 //

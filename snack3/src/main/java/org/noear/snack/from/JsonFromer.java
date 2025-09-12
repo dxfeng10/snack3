@@ -2,6 +2,8 @@ package org.noear.snack.from;
 
 import org.noear.snack.ONode;
 import org.noear.snack.OValue;
+import org.noear.snack.core.utils.StringUtil;
+import org.noear.snack.exception.SnackException;
 import org.noear.snack.core.Context;
 import org.noear.snack.core.Feature;
 import org.noear.snack.core.exts.CharBuffer;
@@ -20,16 +22,35 @@ import java.util.Date;
  * str：支持双引号、单引号
  */
 public class JsonFromer implements Fromer {
-    private static final ThData<CharBuffer> tlBuilder = new ThData<>(()->new CharBuffer());
+    private static final ThData<CharBuffer> tlBuilder = new ThData<>(() -> new CharBuffer());
+
+    /**
+     * 清空线程缓存
+     */
+    public static void clear() {
+        tlBuilder.remove();
+    }
 
     @Override
     public void handle(Context ctx) throws IOException {
         ctx.target = do_handle(ctx, (String) ctx.source);
     }
 
+    private CharBuffer getBuffer(Context ctx) {
+        CharBuffer sBuf = null;
+        if (ctx.options.hasFeature(Feature.DisThreadLocal)) {
+            sBuf = new CharBuffer();//
+        } else {
+            sBuf = tlBuilder.get(); //
+            sBuf.setLength(0);
+        }
+
+        return sBuf;
+    }
+
     private ONode do_handle(Context ctx, String text) throws IOException {
         if (text == null) {
-            return new ONode(ctx.config);
+            return new ONode(null, ctx.options);
         } else {
             text = text.trim();//去除两边的空隔
         }
@@ -40,7 +61,7 @@ public class JsonFromer implements Fromer {
         //完整的处理（支持像："xx",'xx',12,true,{...},[],null,undefined 等）
         //
         if (len == 0) {
-            node = new ONode(ctx.config);
+            node = new ONode(null, ctx.options);
         } else {
             char prefix = text.charAt(0);
             char suffix = text.charAt(text.length() - 1);
@@ -49,25 +70,28 @@ public class JsonFromer implements Fromer {
                     || (prefix == '[' && suffix == ']')) {
                 //object or array
                 //
-                CharBuffer sBuf = tlBuilder.get(); // new CharBuffer();//
-                sBuf.setLength(0);
+                CharBuffer sBuf = getBuffer(ctx);
 
-                node = new ONode(ctx.config);
-                analyse(ctx,new CharReader(text), sBuf, node);
+                node = new ONode(null, ctx.options);
+                analyse(ctx, new CharReader(text), sBuf, node);
 
             } else if (len >= 2 && (
                     (prefix == '"' && suffix == '"') ||
                             (prefix == '\'' && suffix == '\''))) {
                 //string
                 //
-                node = analyse_val(ctx, text.substring(1, len - 1), true, false);
+                CharBuffer sBuf = getBuffer(ctx);
+                CharReader sReader = new CharReader(text);
+                sReader.read();
+                scanString(sReader, sBuf, prefix);
+                node = analyse_val(ctx, sBuf.toString(), true, false);
             } else if (prefix != '<' && len < 40) {
                 //null,num,bool,other
                 //
                 node = analyse_val(ctx, text, false, true);
             } else {
                 //普通的字符串
-                node = new ONode(ctx.config);
+                node = new ONode(null, ctx.options);
                 node.val().setString(text);
             }
         }
@@ -78,7 +102,8 @@ public class JsonFromer implements Fromer {
     public void analyse(Context ctx, CharReader sr, CharBuffer sBuf, ONode p) throws IOException {
         String name = null;
 
-        boolean read_space1=false;
+        boolean read_space1 = false;
+
         // 读入字符
         while (sr.read()) {
             char c = sr.value();
@@ -86,6 +111,11 @@ public class JsonFromer implements Fromer {
             // 根据字符
             switch (c) {
                 case '"':
+                    if (sBuf.length() > 0) {
+                        //发现 " 之前，不应该有内容
+                        throw new SnackException("Json string format is invalid: " + ctx.source);
+                    }
+
                     scanString(sr, sBuf, '"');
                     if (analyse_buf(ctx, p, name, sBuf)) {
                         name = null;
@@ -100,6 +130,10 @@ public class JsonFromer implements Fromer {
                     break;
 
                 case '{':
+                    if (sr.last() == '{') {
+                        throw new SnackException("Json string format is invalid: " + ctx.source);
+                    }
+
                     if (p.isObject()) {
                         analyse(ctx, sr, sBuf, p.getNew(name).asObject());
                         name = null;
@@ -159,10 +193,13 @@ public class JsonFromer implements Fromer {
                     } else {
                         if (c > 32) {
                             sBuf.append(c);
-                        } else if(c == 32){
+                        } else if (c == 32) {
                             if (read_space1) {
                                 read_space1 = false;
-                                sBuf.append(c);
+
+                                if (sBuf.isString == false) {
+                                    sBuf.append(c);
+                                }
                             }
                         }
                     }
@@ -171,7 +208,7 @@ public class JsonFromer implements Fromer {
         }
     }
 
-    private boolean analyse_buf(Context ctx,ONode p, String name, CharBuffer sBuf) {
+    private boolean analyse_buf(Context ctx, ONode p, String name, CharBuffer sBuf) {
         if (p.isObject()) {
             if (name != null) {
                 p.setNode(name, analyse_val(ctx, sBuf));
@@ -199,7 +236,7 @@ public class JsonFromer implements Fromer {
             if ('\\' == c) {
                 c = sr.next();
 
-                if ('t' == c || 'r' == c || 'n' == c || 'f' == c || 'b' == c || '"' == c || '\'' == c || '/'==c || (c >= '0' && c <= '7')) {
+                if ('t' == c || 'r' == c || 'n' == c || 'f' == c || 'b' == c || '"' == c || '\'' == c || '/' == c || '\\' == c || (c >= '0' && c <= '7')) {
                     sBuf.append(IOUtil.CHARS_MARK_REV[(int) c]);
                     continue;
                 }
@@ -237,72 +274,78 @@ public class JsonFromer implements Fromer {
         }
     }
 
-    private ONode analyse_val(Context ctx,CharBuffer sBuf) {
+    private ONode analyse_val(Context ctx, CharBuffer sBuf) {
         if (sBuf.isString == false) {
             sBuf.trimLast();//去掉尾部的空格
         }
-        return analyse_val(ctx,sBuf.toString(), sBuf.isString, false);
+        return analyse_val(ctx, sBuf.toString(), sBuf.isString, false);
     }
 
     /**
      * @param isNoterr 不抛出异常
-     * */
-    private ONode analyse_val(Context ctx,String sval, boolean isString, boolean isNoterr) {
+     */
+    private ONode analyse_val(Context ctx, String sval, boolean isString, boolean isNoterr) {
         ONode orst = null;
 
         if (isString) {
-            if(ctx.config.hasFeature(Feature.StringJsonToNode)) {
+            if (ctx.options.hasFeature(Feature.StringJsonToNode)) {
                 if ((sval.startsWith("{") && sval.endsWith("}")) ||
                         (sval.startsWith("[") && sval.endsWith("]"))) {
-                    orst = ONode.loadStr(sval, ctx.config);
+                    orst = ONode.loadStr(sval, ctx.options);
                 }
             }
 
-            if(orst == null){
-                orst = new ONode(ctx.config);
+            if (orst == null) {
+                orst = new ONode(null, ctx.options);
                 orst.val().setString(sval);
             }
         } else {
-            orst = new ONode(ctx.config);
+            orst = new ONode(null, ctx.options);
             OValue oval = orst.val();
 
-            char c = sval.charAt(0);
             int len = sval.length();
 
-            if (c == 't' && len == 4) { //true
+            if (len == 3 && "NaN".equals(sval)) { // NaN
+                oval.setNull();
+            } else if (len == 4 && "true".equals(sval)) { //true
                 oval.setBool(true);
-            } else if (c == 'f' && len == 5) { //false
+            } else if (len == 4 && "null".equals(sval)) { // null
+                oval.setNull();
+            } else if (len == 5 && "false".equals(sval)) { //false
                 oval.setBool(false);
-            } else if (c == 'n') { // null or new (new not sup)
-                if (len == 4) {
-                    oval.setNull();
-                } else if (sval.indexOf('D') == 4) { //new Date(xxx)
-                    long ticks = Long.parseLong(sval.substring(9, sval.length() - 1));
-                    oval.setDate(new Date(ticks));
-                }
-            } else if (c == 'N' && len == 3) { // NaN
+            } else if (len == 9 && "undefined".equals(sval)) { // undefined
                 oval.setNull();
-            } else if (c == 'u' && len == 9) { // undefined
-                oval.setNull();
-            } else if ((c >= '0' && c <= '9') || (c == '-')) { //number
+            } else if (len > 9 && sval.startsWith("new Date(")) { //new Date(xxx)
+                long ticks = Long.parseLong(sval.substring(9, sval.length() - 1));
+                oval.setDate(new Date(ticks));
+            } else if (StringUtil.isNumber(sval)) { //number
                 if (sval.length() > 16) { //超过16位长度；采用大数字处理
                     if (sval.indexOf('.') > 0) {
-                        oval.setBignumber(new BigDecimal(sval));
+                        oval.setNumber(new BigDecimal(sval));
                     } else {
-                        oval.setBignumber(new BigInteger(sval));
+                        oval.setNumber(new BigInteger(sval));
                     }
                 } else { //小于16位长度；采用常规数字处理
-                    if (sval.indexOf('.') > 0) {
-                        oval.setDecimal(Double.parseDouble(sval));
+                    if (sval.indexOf('.') > 0 || sval.indexOf('E') > 0) {
+                        if (ctx.options.hasFeature(Feature.StringDoubleToDecimal)) {
+                            oval.setNumber(new BigDecimal(sval));
+                        } else {
+                            oval.setNumber(Double.parseDouble(sval));
+                        }
                     } else {
-                        oval.setInteger(Long.parseLong(sval));
+                        Long sval2 = Long.parseLong(sval);
+                        if (sval2 > Integer.MAX_VALUE || ctx.options.hasFeature(Feature.ParseIntegerUseLong)) {
+                            oval.setNumber(sval2);
+                        } else {
+                            oval.setNumber(sval2.intValue());
+                        }
                     }
                 }
             } else { //other
-                if(isNoterr){
+                if (isNoterr) {
                     oval.setString(sval);
-                }else {
-                    throw new RuntimeException("Format error!");
+                } else {
+                    throw new SnackException("Format error!");
                 }
             }
         }
@@ -310,4 +353,3 @@ public class JsonFromer implements Fromer {
         return orst;
     }
 }
-

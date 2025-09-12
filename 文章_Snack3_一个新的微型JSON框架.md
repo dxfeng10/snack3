@@ -34,7 +34,7 @@ ONode 即 `One node` 之意；借签了 `Javascript` 所有变量由 `var` 申�
 <dependency>
   <groupId>org.noear</groupId>
   <artifactId>snack3</artifactId>
-  <version>3.1.8.1</version>
+  <version>3.2.139</version>
 </dependency>
 ```
 
@@ -131,15 +131,15 @@ o.get("data").get("list").fill("[{a:1,b:2},{a:2,c:3}]");
 ```java
 public static void push(Collection<String> alias_ary, String text)  {
     ONode data = new ONode().build((d)->{
-        d.get("platform").val("all");
+        d.getOrNew("platform").val("all");
 
-        d.get("audience").get("alias").addAll(alias_ary);
+        d.getOrNew("audience").getOrNew("alias").addAll(alias_ary);
 
-        d.get("options")
+        d.getOrNew("options")
                 .set("apns_production",false);
 
-        d.get("notification").build(n->{
-            n.get("ios")
+        d.getOrNew("notification").build(n->{
+            n.getOrNew("ios")
                     .set("alert",text)
                     .set("badge",0)
                     .set("sound","happy");
@@ -295,8 +295,8 @@ o.get("data").get("list").fill(list);
 -nodeData() -> ONodeData //获取节点数据
 -nodeType() -> ONodeType //获取节点类型
 
--cfg(cfg:Constants) -> self:ONode   //切换配置
--cfg() -> Constants 				//获取配置
+-opts(opts:Options) -> self:ONode   //切换配置
+-opts() -> Options 				//获取配置
 
 -build(n->..) -> self:ONode     	//节点构建表达式
 -select(jpath:String) -> new:ONode 	                    //使用JsonPath表达式选择节点（默认缓存路径编译）
@@ -380,8 +380,8 @@ o.get("data").get("list").fill(list);
 //加载操作（source 为 String 或 java object）
 //
 +load(source:Object) -> new:ONode    //加载数据
-+load(source:Object, cfg:Constants) -> new:ONode
-+load(source:Object, cfg:Constants, fromer:Fromer) -> new:ONode
++load(source:Object, opts:Options) -> new:ONode
++load(source:Object, opts:Options, fromer:Fromer) -> new:ONode
 
 //加载 string
 +loadStr(source:String) -> new:ONode	//仅String

@@ -1,40 +1,65 @@
 package org.noear.snack.core.utils;
 
-import org.noear.snack.core.exts.FieldWrap;
+import org.noear.snack.exception.SnackException;
 
 import java.io.Reader;
-import java.lang.reflect.Field;
-import java.lang.reflect.Modifier;
+import java.lang.reflect.Constructor;
 import java.sql.Clob;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.function.BiConsumer;
-import java.util.function.Predicate;
 
 /**
  * Bean工具类
  * */
 public class BeanUtil {
 
-    public static final Map<String,Class<?>> clzCached = new ConcurrentHashMap<>();
-    public static Class<?> loadClass(String clzName){
-        try {
-            Class<?> clz = clzCached.get(clzName);
-            if(clz == null) {
-                clz = Class.forName(clzName);
-                clzCached.put(clzName,clz);
-            }
+    /**
+     * 检查集合是否为空
+     *
+     * @param s 集合
+     */
+    public static boolean isEmpty(Collection s) {
+        return s == null || s.size() == 0;
+    }
 
-            return clz;
-        }catch (Exception ex){
-            throw new RuntimeException(ex);
+    /**
+     * 检查映射是否为空
+     *
+     * @param s 集合
+     */
+    public static boolean isEmpty(Map s) {
+        return s == null || s.size() == 0;
+    }
+
+    //////////////
+
+
+    private static final Map<String, Class<?>> clzCached = new ConcurrentHashMap<>();
+
+    /**
+     * @deprecated 3.2.55
+     */
+    @Deprecated
+    public static Class<?> loadClass(String clzName) {
+        if (StringUtil.isEmpty(clzName)) {
+            return null;
         }
+
+        return clzCached.computeIfAbsent(clzName, k -> {
+            try {
+                return Class.forName(k);
+            } catch (Throwable e) {
+                throw new SnackException("Failed to load class: " + clzName, e);
+            }
+        });
     }
 
     /////////////////
 
 
-    /** 将 Clob 转为 String */
+    /**
+     * 将 Clob 转为 String
+     */
     public static String clobToString(Clob clob) {
 
         Reader reader = null;
@@ -51,8 +76,8 @@ public class BeanUtil {
                 }
                 buf.append(chars, 0, len);
             }
-        } catch (Exception ex) {
-            throw new RuntimeException("read string from reader error", ex);
+        } catch (Throwable e) {
+            throw new SnackException("Read string from reader error", e);
         }
 
         String text = buf.toString();
@@ -60,19 +85,47 @@ public class BeanUtil {
         if (reader != null) {
             try {
                 reader.close();
-            }catch (Exception ex){
-                throw new RuntimeException("read string from reader error", ex);
+            } catch (Throwable e) {
+                throw new SnackException("Read string from reader error", e);
             }
         }
 
         return text;
     }
 
-    public static Object newInstance(Class<?> clz) {
+    private static final Map<Class<?>, Object> insCached = new ConcurrentHashMap<>();
+
+    /**
+     * 获取实体
+     */
+    public static Object getInstance(Class<?> clz) {
+        return insCached.computeIfAbsent(clz, k -> newInstance(k));
+    }
+
+    /**
+     * 新建实例
+     */
+    public static Object newInstance(Class<?> clz) throws SnackException {
         try {
-            return clz.newInstance();
-        } catch (Exception ex) {
-            throw new RuntimeException("create instance error, class " + clz.getName());
+            if (clz.isInterface()) {
+                return null;
+            } else {
+                return clz.getDeclaredConstructor().newInstance();
+            }
+        } catch (Throwable e) {
+            throw new SnackException("Instantiation failed: " + clz.getName(), e);
+        }
+    }
+
+    public static Object newInstance(Constructor constructor, Object[] args) throws SnackException {
+        if (constructor == null) {
+            throw new IllegalArgumentException("constructor is null");
+        }
+
+        try {
+            return constructor.newInstance(args);
+        } catch (Throwable e) {
+            throw new SnackException("Instantiation failed: " + constructor.getDeclaringClass().getName(), e);
         }
     }
 }

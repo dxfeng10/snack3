@@ -1,11 +1,12 @@
 package features;
 
 import _models.*;
-import org.junit.Test;
+import lombok.Data;
+import org.junit.jupiter.api.Test;
 import org.noear.snack.ONode;
-import org.noear.snack.core.Constants;
-import org.noear.snack.core.Context;
 import org.noear.snack.core.Feature;
+import org.noear.snack.core.Options;
+import org.noear.snack.core.Context;
 import org.noear.snack.from.ObjectFromer;
 import org.noear.snack.to.ObjectToer;
 
@@ -34,7 +35,7 @@ public class ObjectTest {
         a.b = b;
         b.a = a;
 
-        Context c = new Context(Constants.def(), a);
+        Context c = new Context(Options.def(), a);
 
         new ObjectFromer().handle(c);
 
@@ -55,13 +56,13 @@ public class ObjectTest {
         order.order_id = 2222;
         order.order_num = "ddddd";
 
-        Context c = new Context(Constants.def(), order);
+        Context c = new Context(Options.def(), order);
 
         new ObjectFromer().handle(c);
 
         System.out.println(((ONode)c.target).toJson());
 
-        c = new Context(Constants.def(),((ONode)c.target),OrderModel.class);
+        c = new Context(Options.def(),((ONode)c.target),OrderModel.class);
         new ObjectToer().handle(c);
 
         OrderModel order2 = (OrderModel)c.target;
@@ -91,7 +92,7 @@ public class ObjectTest {
             group.iids[i] = (int) i;
         }
 
-        Context c = new Context(Constants.serialize(), group);
+        Context c = new Context(Options.serialize(), group);
 
         new ObjectFromer().handle(c);
 
@@ -112,6 +113,27 @@ public class ObjectTest {
         for (TypeVariable<? extends Class<? extends List>> t : typeParameters){
             System.out.println(t.getName());
         }
+    }
+
+    @Test
+    public void test4(){
+        String json = "{\"names\":null}";
+        ONode oNode = ONode.loadStr(json);
+        A a = oNode.toObject(A.class);
+
+        assert a.names == null;
+        System.out.println(a);
+
+        oNode = ONode.load(a, Feature.SerializeNulls);
+        String json2 = oNode.toJson();
+        System.out.println(json2);
+
+        assert json.equals(json2);
+    }
+
+    @Data
+    public static class A {
+        private List<String> names;
     }
 
 }

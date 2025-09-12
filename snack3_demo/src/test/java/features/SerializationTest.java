@@ -1,12 +1,11 @@
 package features;
 
-import _models.CModel;
-import _models.OrderModel;
-import _models.UserGroupModel;
-import _models.UserModel;
-import org.junit.Test;
+import _models.*;
+import com.alibaba.fastjson.JSON;
+import org.junit.jupiter.api.Test;
 import org.noear.snack.ONode;
-import org.noear.snack.core.TypeRef;
+import org.noear.solon.Utils;
+import org.noear.solon.core.util.ResourceUtil;
 
 import java.math.BigDecimal;
 import java.sql.Timestamp;
@@ -29,7 +28,7 @@ public class SerializationTest {
         assert "null".equals(temp);
 
         temp = ONode.serialize(new Date());
-        assert "null".equals(temp)==false;
+        assert "null".equals(temp) == false;
 
 
         String tm2 = "{a:'http:\\/\\/raas.dev.zmapi.cn'}";
@@ -40,12 +39,11 @@ public class SerializationTest {
     }
 
     @Test
-    public void test1()throws Exception
-    {
-        try{
+    public void test1() throws Exception {
+        try {
             String val = null;
             val.equals("");
-        }catch (Exception ex) {
+        } catch (Exception ex) {
             ex.printStackTrace();
 
             String json = ONode.serialize(ex);
@@ -55,11 +53,11 @@ public class SerializationTest {
             NullPointerException ex2 = ONode.deserialize(json, NullPointerException.class);
 
             Object ex22 = ONode.deserialize(json, Object.class);
-            assert ex22 instanceof  NullPointerException;
+            assert ex22 instanceof NullPointerException;
 
 
             Object ex23 = ONode.deserialize(json, null);
-            assert  ex23 instanceof Map;
+            assert ex23 instanceof Map;
 
             ex2.printStackTrace();
 
@@ -82,13 +80,13 @@ public class SerializationTest {
         group.tt1 = new Timestamp(new Date().getTime());
         group.tt2 = new Date();
 
-        for (short i = 0; i < 5 ; i++) {
+        for (short i = 0; i < 5; i++) {
             UserModel user = new UserModel();
             user.id = i;
             user.name = "张三" + i;
             user.note = null;
             group.users.add(user);
-            group.users2.put(Integer.valueOf(i),user);
+            group.users2.put(Integer.valueOf(i), user);
             group.names[i] = "李四" + i;
             group.ids[i] = i;
         }
@@ -98,10 +96,10 @@ public class SerializationTest {
         UserGroupModel group2 = ONode.deserialize(json, UserGroupModel.class);
 
         Object group22 = ONode.deserialize(json, Object.class);
-        assert group22 instanceof  UserGroupModel;
+        assert group22 instanceof UserGroupModel;
 
         Object group23 = ONode.deserialize(json, null);
-        assert group23 instanceof  Map;
+        assert group23 instanceof Map;
 
         assert group2.id == 9999;
 
@@ -122,13 +120,13 @@ public class SerializationTest {
         group.tt1 = new Timestamp(new Date().getTime());
         group.tt2 = new Date();
 
-        for (short i = 0; i < 5 ; i++) {
+        for (short i = 0; i < 5; i++) {
             UserModel user = new UserModel();
             user.id = i;
             user.name = "张三" + i;
             user.note = null;
             group.users.add(user);
-            group.users2.put(Integer.valueOf(i),user);
+            group.users2.put(Integer.valueOf(i), user);
             group.names[i] = "李四" + i;
             group.ids[i] = i;
         }
@@ -137,14 +135,15 @@ public class SerializationTest {
         System.out.println(json);
         UserGroupModel group2 = ONode.deserialize(json, UserGroupModel.class);
 
-        Object group22 = ONode.deserialize(json, (new UserGroupModel(){}).getClass());
-        assert group22 instanceof  UserGroupModel;
+        Object group22 = ONode.deserialize(json, (new UserGroupModel() {
+        }).getClass());
+        assert group22 instanceof UserGroupModel;
 
         Object group23 = ONode.deserialize(json, LinkedHashMap.class);
-        assert group23 instanceof  Map;
+        assert group23 instanceof Map;
 
         Object group24 = ONode.deserialize(json, null);
-        assert group24 instanceof  Map;
+        assert group24 instanceof Map;
 
         assert group2.id == 9999;
 
@@ -177,14 +176,14 @@ public class SerializationTest {
         assert obj22 instanceof HashMap;
 
         Map<String, Object> obj23 = ONode.deserialize(json, null);
-        assert obj23 instanceof  Map;
+        assert obj23 instanceof Map;
 
         assert obj2.size() == 1;
     }
 
 
     @Test
-    public void test4() throws Exception{
+    public void test4() throws Exception {
         UserModel user = new UserModel();
         user.id = 1111;
         user.name = "张三";
@@ -207,49 +206,88 @@ public class SerializationTest {
     }
 
     @Test
-    public void test5() throws Exception{
+    public void test5() throws Exception {
         CModel obj = new CModel();
 
         String json = ONode.serialize(obj);
         System.out.println(json);
 
-        CModel obj2 = ONode.deserialize(json,CModel.class);
+        CModel obj2 = ONode.deserialize(json, CModel.class);
 
         assert obj2.list == null;
     }
 
     @Test
-    public void test52() throws Exception{
+    public void test52() throws Exception {
         CModel obj = new CModel();
         obj.init();
 
         String json = ONode.serialize(obj);
         System.out.println(json);
 
-        CModel obj2 = ONode.deserialize(json,CModel.class);
+        CModel obj2 = ONode.deserialize(json, CModel.class);
 
-        assert obj2.list.size()==obj.list.size();
+        assert obj2.list.size() == obj.list.size();
     }
+
     @Test
-    public void test53() throws Exception{
+    public void test53() throws Exception {
         CModel obj = new CModel();
         obj.build();
 
         String json = ONode.serialize(obj);
         System.out.println(json);
 
-        CModel obj2 = ONode.deserialize(json,CModel.class);
+        CModel obj2 = ONode.deserialize(json, CModel.class);
 
-        assert obj2.list.size()==obj.list.size();
+        assert obj2.list.size() == obj.list.size();
     }
 
     @Test
-    public void test6() throws Exception{
+    public void test6() throws Exception {
         String tmp = "{code:1,msg:'Hello world',data:{list:[1,2,3,4,5], ary2:[{a:2},{a:3,b:{c:'ddd'}}]}}";
         //1.加载json
         Object n = ONode.deserialize(tmp);
 
         assert n instanceof Map;
-        assert ((Map)n).size() == 3;
+        assert ((Map) n).size() == 3;
+    }
+
+    @Test
+    public void test7() throws Exception {
+        String json = ResourceUtil.getResourceAsString("ResultTree.json");
+        ResultTree rst = ONode.deserialize(json, ResultTree.class);
+
+        System.out.println(rst);
+        assert rst != null;
+
+        String json2 = ONode.stringify(rst);
+        assert json2 != null;
+    }
+
+    @Test
+    public void test8() {
+        String json = ONode.serialize("好人");
+        System.out.println(json);
+        String str = ONode.deserialize(json);
+        System.out.println(str);
+
+        assert "好人".equals(str);
+    }
+
+    @Test
+    public void test8_2() { //不支持
+        String json = JSON.toJSONString("好人");
+        System.out.println(json);
+        String str = JSON.parseObject(json, String.class);
+        System.out.println(str);
+
+        assert "好人".equals(str);
+    }
+
+    @Test
+    public void test9() {
+        String json = ONode.serialize(new BigDecimal("0.1"));
+        System.out.println(json);
     }
 }

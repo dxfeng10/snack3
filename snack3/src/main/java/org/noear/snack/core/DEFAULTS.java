@@ -7,8 +7,9 @@ import org.noear.snack.to.JsonToer;
 import org.noear.snack.to.ObjectToer;
 import org.noear.snack.to.Toer;
 
-import java.text.DateFormat;
-import java.text.SimpleDateFormat;
+import java.time.OffsetDateTime;
+import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.util.Locale;
 import java.util.TimeZone;
 
@@ -19,16 +20,16 @@ public class DEFAULTS {
     /** 默认特性 */
     public static final int DEF_FEATURES = Feature.QuoteFieldNames.code;
     /** 默认类型的key */
-    public static final String DEF_TYPE_KEY = "@type";
+    public static final String DEF_TYPE_PROPERTY_NAME = "@type";
 
     /** 默认时区 */
     public static final TimeZone  DEF_TIME_ZONE = TimeZone.getDefault();
+    /** 默认偏移时区 */
+    public static final ZoneOffset  DEF_OFFSET = OffsetDateTime.now().getOffset();
     /** 默认地区 */
     public static final Locale    DEF_LOCALE    = Locale.getDefault();
-    /** 默认时间格式字符串 */
-    public static final String DEF_DATE_FORMAT_STRING = "yyyy-MM-dd'T'HH:mm:ss";
     /** 默认时间格式器 */
-    public static DateFormat DEF_DATE_FORMAT = new SimpleDateFormat(DEF_DATE_FORMAT_STRING, DEF_LOCALE);
+    public static String DEF_DATETIME_FORMAT = "yyyy-MM-dd HH:mm:ss";
 
     /** 默认对象来源器 */
     public static final Fromer DEF_OBJECT_FROMER = new ObjectFromer();

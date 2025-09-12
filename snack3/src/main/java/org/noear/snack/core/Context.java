@@ -1,7 +1,7 @@
 package org.noear.snack.core;
 
 import org.noear.snack.ONode;
-import org.noear.snack.core.exts.ParameterizedTypeImpl;
+import org.noear.snack.exception.SnackException;
 
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
@@ -10,37 +10,52 @@ import java.lang.reflect.Type;
  * 处理上下文对象
  * */
 public class Context {
-    /** 常量配置 */
-    public final Constants config;
+    /**
+     * 选项
+     */
+    public final Options options;
 
-    /** 来源 */
+    /**
+     * 来源
+     */
     public Object source;
 
-    /** 目标 */
+    /**
+     * 深度
+     * */
+    public int depth = 0;
+    /**
+     * 漂视的
+     * */
+    public boolean pretty =false;
+
+    /**
+     * 目标
+     */
     public Object target;
     public Class<?> target_clz;
-    public Type     target_type;
+    public Type target_type;
 
     /**
      * 用于来源处理的构造
      */
-    public Context(Constants config, Object from) {
-        this.config = config;
+    public Context(Options options, Object from) {
+        this.options = options;
         this.source = from;
     }
 
     /**
      * 用于去处的构造
      */
-    public Context(Constants config, ONode node, Type type0) {
-        this.config = config;
+    public Context(Options options, ONode node, Type type0) {
+        this.options = options;
         this.source = node;
 
         if (type0 == null) {
             return;
         }
 
-        if(type0 instanceof Class){
+        if (type0 instanceof Class) {
             //for class
             //
             Class<?> clz = (Class<?>) type0;
@@ -55,19 +70,25 @@ public class Context {
 
             if (clz.getName().indexOf("$") > 0) {
                 // 临时类：(new ArrayList<UserModel>(){}).getClass(); (new UserModel(){}).getClass();
-                //
-                initType(clz.getGenericSuperclass());
+                // => features.GenericTest$6;
+                // 内部类：Server.One.class
+                // => _model3.Server$One
+                if (clz.isMemberClass()) {
+                    initType(clz, clz);
+                } else {
+                    initType(clz.getGenericSuperclass());
+                }
             } else {
                 initType(clz, clz);
             }
-        }else{
+        } else {
             //for type
             //
             initType(type0);
         }
     }
 
-    private void initType(Type type){
+    private void initType(Type type) {
         if (type instanceof ParameterizedType) {
             ParameterizedType pType = (ParameterizedType) type;
 
@@ -77,20 +98,28 @@ public class Context {
         }
     }
 
-    private void initType(Type type, Class<?> clz){
+    private void initType(Type type, Class<?> clz) {
         target_type = type;
         target_clz = clz;
+
+        if (clz != null && clz != Object.class) {
+            if (options.getClassLoader() == null) {
+                options.setClassLoader(clz.getClassLoader());
+            }
+        }
     }
 
     /**
      * 使用代理对当前上下文进行处理
      */
-    public Context handle(Handler handler)  {
+    public Context handle(Handler handler) {
         try {
             handler.handle(this);
             return this;
-        }catch (Exception ex){
-            throw new RuntimeException(ex);
+        } catch (RuntimeException e) {
+            throw e;
+        } catch (Throwable e) {
+            throw new SnackException(e);
         }
     }
 }

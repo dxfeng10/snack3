@@ -1,6 +1,6 @@
 package features;
 
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 import org.noear.snack.ONode;
 
 import java.util.List;
@@ -14,13 +14,16 @@ public class JsonPathTest {
 
         //2.取一个属性的值
         String msg = n.get("msg").getString();
+        assert "Hello world".equals(msg);
 
         //3.取列表里的一项
         int li2  = n.get("data").get("list").get(2).getInt();
+        assert li2 == 3;
 
         //4.获取一个数组
         //List<Integer> list = n.get("data").get("list").toObject(List.class);
         List<Integer> list = n.select("data.list").toObject(List.class);
+        assert list.size() == 5;
 
 
 
@@ -29,8 +32,22 @@ public class JsonPathTest {
 
         List<Integer> list2 = n.select("data.list[2,4]").toObject(List.class);
         List<Integer> list3 = n.select("data.list[2:4]").toObject(List.class);
+        assert list2.size() == 2;
+        assert list3.size() == 2;
+
+
+        List<Integer> list22 = n.usePaths().select("data.list[2,4]").toObject(List.class);
+        List<Integer> list32 = n.usePaths().select("data.list[2:4]").toObject(List.class);
+        assert list22.size() == 2;
+        assert list32.size() == 2;
 
         ONode ary2_a = n.select("data.ary2[*].b.c");
+        assert ary2_a.count() == 1;
+
+        ONode ary2_a2 = n.usePaths().select("data.ary2[*].b.c");
+        assert ary2_a2.count() == 1;
+        assert ary2_a2.get(0).parent().parent().parent().equals(ary2_a2.get(0).parents(2));
+        assert "{\"a\":3,\"b\":{\"c\":\"ddd\"}}".equals(ary2_a2.get(0).parents(1).toJson());
 
         ONode ary2_b = n.select("..b");
 
@@ -184,6 +201,42 @@ public class JsonPathTest {
 
         ONode t7 = n.select("$..b[?(@.c =~ /\\d+/)]");
         assert  t7.count()==3;
+    }
+
+    @Test
+    public void testx2_2() {
+        //1.加载json
+        ONode n = ONode.load("[1,2,3,4]");
+
+        ONode t2 = n.select("$..*[?(@ == 1)]");
+        assert t2.count() == 1;
+    }
+
+    @Test
+    public void testx2_3() {
+        //1.加载json
+        ONode n = ONode.load("{ \"store\": { \"book\": [ { \"category\": \"reference\", \"author\": \"Nigel Rees\", \"title\": \"Sayings of the Century\", \"price\": 8.95 }, { \"category\": \"fiction\", \"author\": \"Evelyn Waugh\", \"title\": \"Sword of Honour\", \"price\": 12.99 }, { \"category\": \"fiction\", \"author\": \"Herman Melville\", \"title\": \"Moby Dick\", \"isbn\": \"0-553-21311-3\", \"price\": 8.99 }, { \"category\": \"fiction\", \"author\": \"J. R. R. Tolkien\", \"title\": \"The Lord of the Rings\", \"isbn\": \"0-395-19395-8\", \"price\": 22.99 } ], \"bicycle\": { \"color\": \"red\", \"price\": 19.95 } }, \"expensive\": 10 }");
+
+        ONode t2 = n.select("$..*[?(@ == 19.95)]");
+        assert t2.count() == 1;
+    }
+
+    @Test
+    public void testx2_4() {
+        //1.加载json
+        ONode n = ONode.load("{ \"store\": { \"book\": [ { \"category\": \"reference\", \"author\": \"Nigel Rees\", \"title\": \"Sayings of the Century\", \"price\": 8.95 }, { \"category\": \"fiction\", \"author\": \"Evelyn Waugh\", \"title\": \"Sword of Honour\", \"price\": 12.99 }, { \"category\": \"fiction\", \"author\": \"Herman Melville\", \"title\": \"Moby Dick\", \"isbn\": \"0-553-21311-3\", \"price\": 8.99 }, { \"category\": \"fiction\", \"author\": \"J. R. R. Tolkien\", \"title\": \"The Lord of the Rings\", \"isbn\": \"0-395-19395-8\", \"price\": 22.99 } ], \"bicycle\": { \"color\": \"red\", \"price\": 19.95 } }, \"expensive\": 10 }");
+
+        ONode t2 = n.select("$..*[?(@.price == 19.95)]");
+        assert t2.count() == 1;
+    }
+
+    @Test
+    public void testx2_5() {
+        //1.加载json
+        ONode n = ONode.load("{ \"store\": { \"book\": [ { \"category\": \"reference\", \"author\": \"Nigel Rees\", \"title\": \"Sayings of the Century\", \"price\": 8.95 }, { \"category\": \"fiction\", \"author\": \"Evelyn Waugh\", \"title\": \"Sword of Honour\", \"price\": 12.99 }, { \"category\": \"fiction\", \"author\": \"Herman Melville\", \"title\": \"Moby Dick\", \"isbn\": \"0-553-21311-3\", \"price\": 8.99 }, { \"category\": \"fiction\", \"author\": \"J. R. R. Tolkien\", \"title\": \"The Lord of the Rings\", \"isbn\": \"0-395-19395-8\", \"price\": 22.99 } ], \"bicycle\": { \"color\": \"red\", \"price\": 19.95 } }, \"expensive\": 10 }");
+
+        ONode t2 = n.select("$..[?(@.price == 19.95)]");
+        assert t2.count() == 1;
     }
 
     @Test

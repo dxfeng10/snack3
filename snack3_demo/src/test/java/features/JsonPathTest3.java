@@ -1,11 +1,11 @@
 package features;
 
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 import org.noear.snack.ONode;
 
 import java.util.*;
 
-import static org.junit.Assert.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class JsonPathTest3 {
     public static class Entity {
@@ -33,7 +33,10 @@ public class JsonPathTest3 {
         ONode n = ONode.load(entity);
 
         assert n.select("$.id").getInt() == 123;
-        assert n.select("$.*").count() == 2;
+        assert n.select("$.*").count() == 2;//因为 StringNullAsEmpty，使 name 变成了 ""
+
+        System.out.println(n.usePaths().select("$.*"));
+        assert n.usePaths().select("$.*").pathList().size() == 2;
     }
 
     @Test
@@ -45,6 +48,9 @@ public class JsonPathTest3 {
 
         List<String> names = n.select("$.name").toObject(List.class);
         assert names.size() == 2;
+
+        System.out.println(n.usePaths().select("$.name"));
+        assert n.usePaths().select("$.name").pathList().size() == 2;
     }
 
     @Test
@@ -58,6 +64,10 @@ public class JsonPathTest3 {
         List<Entity> result = n.select("$[1,2]").toObject((new ArrayList<Entity>() {
         }).getClass());
         assert result.size() == 2;
+
+
+        System.out.println(n.usePaths().select("$[1,2]"));
+        assert n.usePaths().select("$[1,2]").pathList().size() == 2;
     }
 
     @Test
@@ -71,6 +81,9 @@ public class JsonPathTest3 {
         List<Entity> result = n.select("$[0:2]").toObject((new ArrayList<Entity>() {
         }).getClass());
         assert result.size() == 2;
+
+        System.out.println(n.usePaths().select("$[0:2]"));
+        assert n.usePaths().select("$[0:2]").pathList().size() == 2;
     }
 
     @Test
@@ -84,6 +97,9 @@ public class JsonPathTest3 {
 
         ONode rst = n.select("$[?($.id in [1001,1002])]");
         assert rst.count() == 2;
+
+        System.out.println(n.usePaths().select("$[?($.id in [1001,1002])]"));
+        assert n.usePaths().select("$[?($.id in [1001,1002])]").pathList().size() == 2;
     }
 
     @Test
@@ -117,10 +133,10 @@ public class JsonPathTest3 {
         ONode n = ONode.load(root);
 
         List<Object> ids = n.select("$..id").toObject(List.class);
-        assertEquals(3l, ids.size());
-        assertEquals(1001l, ids.get(0));
-        assertEquals(1002l, ids.get(1));
-        assertEquals(1003l, ids.get(2));
+        assertEquals(3, ids.size());
+        assertEquals(1001, ids.get(0));
+        assertEquals(1002, ids.get(1));
+        assertEquals(1003, ids.get(2));
     }
 
     @Test
@@ -154,6 +170,11 @@ public class JsonPathTest3 {
         //得到所有的书
         ONode books = o.select("$.store.book");
         System.out.println("books=::" + books);
+        assert books.isArray();
+        assert books.count() == 2;
+        System.out.println(o.usePaths().select("$.store.book"));
+        assert o.usePaths().select("$.store.book").pathList().size() == 1;
+
 
         //得到所有的书名
         ONode titles = o.select("$.store.book.title");
@@ -162,6 +183,16 @@ public class JsonPathTest3 {
         //第一本书title
         ONode title = o.select("$.store.book[0].title");
         System.out.println("title=::" + title);
+
+        System.out.println(o.usePaths().select("$.store.book[0].title"));
+        assert o.usePaths().select("$.store.book[0].title").pathList().size() == 1;
+
+        //倒数第一本书title
+        ONode title2 = o.select("$.store.book[-1].title");
+        System.out.println("title=::" + title2);
+        //assert "go语言实战".equals(title2);
+        System.out.println(o.usePaths().select("$.store.book[-1].title"));
+        assert o.usePaths().select("$.store.book[-1].title").pathList().size() == 1;
 
         //price大于10元的book
         ONode list = o.select("$.store.book[?(price > 10)]");
@@ -185,5 +216,39 @@ public class JsonPathTest3 {
         ONode read = o.select("$.store.bicycle['color','price']");
         System.out.println("bicycle的color和price属性值=::" + read);
 
+    }
+
+    @Test
+    public void testx2() {
+        String json = "{\"school\":[{\"name\":\"清华\",\"grade\":[{\"class\":\"二\",\"manSum\":12},{\"class\":\"一班\",\"manSum\":12}]},{\"name\":\"北大\",\"grade\":[{\"class\":\"二\",\"manSum\":12},{\"class\":\"一班\",\"manSum\":12}]}]}";
+
+        ONode oNode = ONode.loadStr(json);
+
+        ONode oNode1 = null;
+
+        oNode1 = oNode.select("$.school[?(@.name == '清华')]");
+        System.out.println(oNode1.toJson());
+
+        oNode1 = oNode.select("$.school[?(@.name == '清华')].grade[0]");
+        System.out.println(oNode1.toJson());
+        assert oNode1.get(0).get("class").getString().equals("二");
+        System.out.println(oNode.usePaths().select("$.school[?(@.name == '清华')].grade[0]"));
+        assert oNode.usePaths().select("$.school[?(@.name == '清华')].grade[0]").pathList().size() == 1;
+
+
+        oNode1 = oNode.select("$.school[?(@.name == '清华')].grade[0][?(@.class == '一班')]");
+        System.out.println(oNode1.toJson());
+        assert oNode1.count() == 0;
+
+        oNode1 = oNode.select("$.school[?(@.name == '清华')].grade[0][?(@.class == '一班')].manSum");
+        System.out.println(oNode1.toJson());
+        assert oNode1.count() == 0;
+
+        oNode1 = oNode.select("$.school[?(@.name == '清华')].grade[0][?(@.class == '一班')].manSum.sum()");
+        System.out.println(oNode1.toJson());
+        assert oNode1.isNull();
+
+        oNode1 = oNode.select("$..manSum.sum()");
+        System.out.println(oNode1.toJson());
     }
 }

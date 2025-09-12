@@ -1,6 +1,6 @@
 package benchmark.jsonpath;
 
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 import org.noear.snack.ONode;
 
 public class SpeedJsonPathTest {
@@ -18,6 +18,7 @@ public class SpeedJsonPathTest {
         ONode n = ONode.load("{code:1,msg:'Hello world',data:{list:[1,2,3,4,5], ary2:[{a:2},{a:3,b:{c:'ddd'}}]}}");
 
         ONode tmp = n.select("$..a", useStandard);
+        System.out.println(tmp);//打印
         assert tmp.count()==2;
 
         long start = System.currentTimeMillis();
@@ -40,6 +41,7 @@ public class SpeedJsonPathTest {
         ONode n = ONode.load("{code:1,msg:'Hello world',data:{list:[1,2,3,4,5], ary2:[{a:2},{a:3,b:{c:'ddd'}}]}}");
 
         ONode tmp = n.select("$..*", useStandard);
+        System.out.println(tmp);//打印
         assert tmp.count()==16;
 
         long start = System.currentTimeMillis();
@@ -62,6 +64,7 @@ public class SpeedJsonPathTest {
         ONode n = ONode.load("{code:1,msg:'Hello world',data:{list:[1,2,3,4,5], ary2:[{a:2},{a:3,b:{c:'ddd'}}]}}");
 
         ONode tmp = n.select("$.data.list[1,4]", useStandard);
+        System.out.println(tmp);//打印
         assert tmp.count() == 2;
 
         long start = System.currentTimeMillis();
@@ -84,11 +87,35 @@ public class SpeedJsonPathTest {
         ONode n = ONode.load("{code:1,msg:'Hello world',data:{list:[1,2,3,4,5], ary2:[{a:2},{a:3,b:{c:'ddd'}}]}}");
 
         ONode tmp = n.select("$.data.list[1:4]", useStandard);
+        System.out.println(tmp);//打印
         assert tmp.count() == 3;
 
         long start = System.currentTimeMillis();
         for(int i=0,len=1000000; i<len; i++) {
             n.select("$.data.list[1:4]", useStandard);
+        }
+
+        long times = System.currentTimeMillis() - start;
+
+        System.out.println(times);
+
+        assert times > 0;
+    }
+
+    @Test
+    public void test40(){
+        //1000000=>97,100,97
+        //
+        //1.加载json
+        ONode n = ONode.load("{code:1,msg:'Hello world',data:{list:[1,2,3,4,5], ary2:[{a:2},{a:3,b:{c:'ddd'}}]}}");
+
+        ONode tmp = n.select("$.data.ary2[0].a", useStandard);
+        System.out.println(tmp);//打印
+        assert tmp.getInt() == 2;
+
+        long start = System.currentTimeMillis();
+        for(int i=0,len=1000000; i<len; i++) {
+            n.select("$.data.ary2[0].a)", useStandard);
         }
 
         long times = System.currentTimeMillis() - start;
@@ -106,6 +133,7 @@ public class SpeedJsonPathTest {
         ONode n = ONode.load("{code:1,msg:'Hello world',data:{list:[1,2,3,4,5], ary2:[{a:2},{a:3,b:{c:'ddd'}}]}}");
 
         ONode tmp = n.select("$..ary2[0].a", useStandard);
+        System.out.println(tmp);//打印
         assert tmp.count() == 1;
 
         long start = System.currentTimeMillis();
@@ -169,7 +197,7 @@ public class SpeedJsonPathTest {
 
     @Test
     public void test6(){
-        //1000000=>173,152,155
+        //1000000=>173,152,155;;;239,235,237
         //
         //1.加载json
         ONode n = ONode.load("{code:1,msg:'Hello world',data:{list:[1,2,3,4,5], ary2:[{a:2},{a:3,b:{c:'ddd'}}]}}");
@@ -223,6 +251,8 @@ public class SpeedJsonPathTest {
 
 
         ONode tmp1 = n.select("$..c.min()", useStandard);
+        System.out.println(tmp1);
+
         if(useStandard) {
             assert tmp1.count() == 0;
         }else{
@@ -249,6 +279,7 @@ public class SpeedJsonPathTest {
         ONode n = ONode.load("[{c:'aaaa'}, {b:'cccc'}, {c:'cccaa'}]");
 
         ONode tmp = n.select("$[?(@.c =~ /.*a+/)]", useStandard);
+        System.out.println(tmp);
         assert tmp.count() == 2;
 
         long start = System.currentTimeMillis();

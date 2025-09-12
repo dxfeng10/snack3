@@ -15,23 +15,31 @@
 
 //检测操作
 //
--isObject() -> bool  //检查当前节点是否为对象
--isArray()  -> bool  //检查当前节点是否为数组
--isValue()  -> bool  //检查当前节点是否为值
--isNull()   -> bool  //检查当前节点是否为null
+-isObject()    -> bool  //检查当前节点是否为对象
+-isArray()     -> bool  //检查当前节点是否为数组
+-isValue()     -> bool  //检查当前节点是否为值
+-isNull()      -> bool  //检查当前节点是否为null
+-isUndefined() -> bool  //检查当前节点是否未定义（即：nodeType == ONodeType.Null）
 
 //公共
 //
 -nodeData() -> ONodeData //获取当前节点数据
 -nodeType() -> ONodeType //获取当前节点类型
 
--cfg(cfg:Constants) -> self:ONode   //切换配置
--cfg() -> Constants 				//获取配置
+-options(opts:Options) -> self:ONode    //切换选项
+-options() -> Options 				    //获取选项
 
 -build(n->..) -> self:ONode     	//节点构建表达式
 -select(jpath:String) -> new:ONode 	                    //使用JsonPath表达式选择节点（默认缓存路径编译）
 -select(jpath:String, useStandard:boolean)-> new:ONode  //useStandard:使用标准模式,默认非标准
 -select(jpath:String, useStandard:boolean, cacheJpath:boolean)-> new:ONode   //cacheJpath:是否缓存javaPath编译成果，默认缓存
+-selectOrNew(path:jpath) -> new:ONode //使用JsonPath表达式选择节点，如果没有自动构建默认节点（默认缓存路径编译）
+
+-exists(jpath:String) -> bool //使用JsonPath表达式查检节点是否存在（默认缓存路径编译）
+
+-usePaths() -> self:ONode   //使用路径（把当前作为根级，深度生成每个子节点的路径）。一般只在根级生成一次 
+-path() -> String           //获取路径属性（可能为 null；比如临时集合，或者未生成）
+-pathList() -> List<String> //获取节点路径列表（如果是临时集合，会提取多个路径）
 
 -clear()                    //清除子节点，对象或数组有效
 -count() -> int             //子节点数量，对象或数组有效
@@ -57,8 +65,9 @@
 -obj() -> Map<String,ONode>                     //获取节点对象数据结构体（如果不是对象类型，会自动转换）
 -contains(key:String) -> bool                   //是否存在对象子节点?
 -rename(key:String,newKey:String) -> self:ONode //重命名子节点并返回自己
--get(key:String) -> child:ONode                 //获取对象子节点（不存在，生成新的子节点并返回）
--getOrNew(key:String) -> child:ONode            //获取对象子节点（不存在，生成新的子节点并返回）
+-get(key:String) -> child:ONode                 //获取对象子节点（不存在，返回空节点）***
+-getOrNew(key:String) -> child:ONode                        //获取对象子节点（不存在，生成新的子节点并返回）
+-getOrNew(key:String,newNodeType:ONodeType) -> child:ONode  //获取对象子节点（不存在，生成新的子节点并返回）
 -getOrNull(key:String) -> child:ONode           //获取对象子节点（不存在，返回null）
 -getNew(key:String) -> child:ONode              //生成新的对象子节点，会清除之前的数据
 -set(key:String,val:Object) -> self:ONode           //设置对象的子节点（会自动处理类型）
@@ -72,9 +81,10 @@
 //数组操作
 //
 -ary() -> List<ONode>                   //获取节点数组数据结构体（如果不是数组，会自动转换）
--get(index:int)  -> child:ONode                 //获取数组子节点（超界，返回空节点）
--getOrNew(index:int)  -> child:ONode            //获取数组子节点（不存在，生成新的子节点并返回）
--getOrNull(index:int)  -> child:ONode           //获取数组子节点（超界，返回null）
+-get(index:int)  -> child:ONode                 //获取数组子节点（不存在，返回空节点）
+-getOrNew(index:int)  -> child:ONode                       //获取数组子节点（不存在，生成新的子节点并返回）
+-getOrNew(index:int,newNodeType:ONodeType) -> child:ONode  //获取数组子节点（不存在，生成新的子节点并返回）
+-getOrNull(index:int)  -> child:ONode           //获取数组子节点（不存在，返回null）
 -addNew() -> child:ONode                        //生成新的数组子节点
 -add(val) -> self:ONode                         //添加数组子节点 //val:为常规类型或ONode
 -addNode(val:ONode) -> self:ONode               //添加数组子节点，值为ONode类型（需要在外部初始化类型，建议用add(v)）
@@ -95,8 +105,9 @@
 -toString() -> String               //转为string （由字符串转换器决定，默认为json）
 -toJson() -> String                 //转为json string
 -toData() -> Object 			    //转为数据结构体（Map,List,Value）
+-toObject() -> T                    //转为java object（自动输出类型）
 -toObject(clz:Class<T>) -> T        //转为java object（clz=Object.class：自动输出类型）
--toObjectList(clz:Class<T>) -> List<T>   //转为java list，用于简化：toObject((new ArrayList<User>()).getClass()) 这种写法
+-toObjectList(clz:Class<T>) -> List<T>   //转为java list，用于简化：toObject(new ArrayList<User>(){}.getClass()) 这种写法
 
 -to(toer:Toer, clz:Class<T>) -> T   //将当前节点通过toer进行转换
 -to(toer:Toer) -> T                 //将当前节点通过toer进行转换
@@ -115,8 +126,8 @@
 //
 +load(source:Object) -> new:ONode    //加载数据
 +load(source:Object, Feature... features) -> new:ONode
-+load(source:Object, cfg:Constants) -> new:ONode
-+load(source:Object, cfg:Constants, fromer:Fromer) -> new:ONode
++load(source:Object, cfg:Options) -> new:ONode
++load(source:Object, cfg:Options, fromer:Fromer) -> new:ONode
 
 //加载 string
 +loadStr(source:String) -> new:ONode	//仅String
@@ -136,3 +147,4 @@
 +deserialize(source:String, clz:Class<?>) -> T        //反序列化
 
 ```
+

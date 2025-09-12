@@ -1,9 +1,9 @@
 package features;
 
 import _models.UserModel;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 import org.noear.snack.ONode;
-import org.noear.snack.core.Constants;
+import org.noear.snack.core.Options;
 import org.noear.snack.core.Feature;
 
 import java.util.*;
@@ -24,10 +24,10 @@ public class _demo {
         list.add(u2);
 
 
-        ONode o = ONode.load(" {code:1,msg:'succeed'}", Constants.serialize());
+        ONode o = ONode.load(" {code:1,msg:'succeed'}", Options.serialize());
         assert 1 == o.get("code").getInt();
 
-        o.get("data").get("list").fill(list);
+        o.getOrNew("data").getOrNew("list").fill(list);
 
         assert o.select("data.list").count() == 2;
 
@@ -155,7 +155,7 @@ public class _demo {
         //
         //去掉QuoteFieldNames特性，添加UseSingleQuotes特性
         //
-        tmp.cfg().sub(Feature.QuoteFieldNames).add(Feature.UseSingleQuotes);
+        tmp.options().remove(Feature.QuoteFieldNames).add(Feature.UseSingleQuotes);
 
         String txt2 = tmp.toJson();
 

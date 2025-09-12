@@ -5,9 +5,9 @@ import org.noear.snack.ONodeData;
 import org.noear.snack.OValue;
 import org.noear.snack.core.Feature;
 import org.noear.snack.core.exts.ThData;
+import org.noear.snack.core.utils.DateUtil;
 import org.noear.snack.core.utils.IOUtil;
 import org.noear.snack.core.utils.TypeUtil;
-import org.noear.snack.core.Constants;
 import org.noear.snack.core.Context;
 
 import java.math.BigDecimal;
@@ -21,39 +21,50 @@ import java.util.Iterator;
  * 将ONode 转为 json string
  * */
 public class JsonToer implements Toer {
-    private static final ThData<StringBuilder> tlBuilder = new ThData(()->new StringBuilder(1024*5));
+    private static final ThData<StringBuilder> tlBuilder = new ThData(() -> new StringBuilder(1024 * 5));
+    /**
+     * 清空线程缓存
+     * */
+    public static void clear(){
+        tlBuilder.remove();
+    }
 
     @Override
     public void handle(Context ctx) {
         ONode o = (ONode) ctx.source;
 
         if (null != o) {
-            StringBuilder sb =  tlBuilder.get(); // new StringBuilder(1024*5); //
-            sb.setLength(0);
+            StringBuilder sb = null;
+            if (ctx.options.hasFeature(Feature.DisThreadLocal)) {
+                sb = new StringBuilder(1024 * 5); //5k
+            } else {
+                sb = tlBuilder.get(); //
+                sb.setLength(0);
+            }
 
-            analyse(ctx.config, o, sb);
+            ctx.pretty = ctx.options.hasFeature(Feature.PrettyFormat);
+            analyse(ctx, o, sb);
 
             ctx.target = sb.toString();
         }
     }
 
-
-    public void analyse(Constants cfg, ONode o, StringBuilder sb) {
+    public void analyse(Context ctx, ONode o, StringBuilder sb) {
         if (o == null) {
             return;
         }
 
         switch (o.nodeType()) {
             case Value:
-                writeValue(cfg, sb, o.nodeData());
+                writeValue(ctx, sb, o.nodeData());
                 break;
 
             case Array:
-                writeArray(cfg, sb, o.nodeData());
+                writeArray(ctx, sb, o.nodeData());
                 break;
 
             case Object:
-                writeObject(cfg, sb, o.nodeData());
+                writeObject(ctx, sb, o.nodeData());
                 break;
 
             default:
@@ -62,35 +73,89 @@ public class JsonToer implements Toer {
         }
     }
 
-    private void writeArray(Constants cfg, StringBuilder sBuf, ONodeData d){
+    private void writeArray(Context ctx, StringBuilder sBuf, ONodeData d) {
         sBuf.append("[");
-        Iterator<ONode> iterator = d.array.iterator();
-        while (iterator.hasNext()) {
-            ONode sub = iterator.next();
-            analyse(cfg, sub, sBuf);
-            if (iterator.hasNext()) {
-                sBuf.append(",");
+
+        if(d.array.size() > 0) {
+            //如果有成员？
+            if (ctx.pretty) {
+                ctx.depth++;
+            }
+
+            Iterator<ONode> iterator = d.array.iterator();
+            while (iterator.hasNext()) {
+                if (ctx.pretty) {
+                    sBuf.append("\n");
+                    printDepth(ctx, sBuf);
+                }
+
+                ONode sub = iterator.next();
+                analyse(ctx, sub, sBuf);
+                if (iterator.hasNext()) {
+                    sBuf.append(",");
+                }
+            }
+
+            if (ctx.pretty) {
+                sBuf.append("\n");
+                ctx.depth--;
+                printDepth(ctx, sBuf);
             }
         }
+
         sBuf.append("]");
     }
 
-    private void writeObject(Constants cfg, StringBuilder sBuf, ONodeData d){
+    private void writeObject(Context ctx, StringBuilder sBuf, ONodeData d) {
         sBuf.append("{");
-        Iterator<String> itr = d.object.keySet().iterator();
-        while (itr.hasNext()) {
-            String k = itr.next();
-            writeName(cfg,sBuf,k);
-            sBuf.append(":");
-            analyse(cfg, d.object.get(k), sBuf);
-            if (itr.hasNext()) {
-                sBuf.append(",");
+
+        if(d.object.size() > 0) {
+            //如果有成员
+            if (ctx.pretty) {
+                ctx.depth++;
+            }
+
+            Iterator<String> itr = d.object.keySet().iterator();
+            while (itr.hasNext()) {
+                String k = itr.next();
+
+                if (ctx.pretty) {
+                    sBuf.append("\n");
+                    printDepth(ctx, sBuf);
+                }
+
+                writeName(ctx, sBuf, k);
+                sBuf.append(":");
+
+                if (ctx.pretty) {
+                    sBuf.append(" ");
+                }
+
+                analyse(ctx, d.object.get(k), sBuf);
+                if (itr.hasNext()) {
+                    sBuf.append(",");
+                }
+            }
+
+            if (ctx.pretty) {
+                sBuf.append("\n");
+                ctx.depth--;
+                printDepth(ctx, sBuf);
             }
         }
+
         sBuf.append("}");
     }
 
-    private void writeValue(Constants cfg, StringBuilder sBuf, ONodeData d){
+    private void printDepth(Context ctx, StringBuilder sBuf) {
+        if (ctx.depth > 0) {
+            for (int i = 0; i < ctx.depth; i++) {
+                sBuf.append("  ");
+            }
+        }
+    }
+
+    private void writeValue(Context ctx, StringBuilder sBuf, ONodeData d) {
         OValue v = d.value;
         switch (v.type()) {
             case Null:
@@ -98,27 +163,19 @@ public class JsonToer implements Toer {
                 break;
 
             case String:
-                writeValString(cfg, sBuf, v.getRawString(),true);
+                writeValString(ctx, sBuf, v.getRawString(), true);
                 break;
 
             case DateTime:
-                writeValDate(cfg,sBuf,v.getRawDate());
+                writeValDate(ctx, sBuf, v.getRawDate());
                 break;
 
             case Boolean:
-                writeValBool(cfg,sBuf,v.getRawBoolean());
+                writeValBool(ctx, sBuf, v.getRawBoolean());
                 break;
 
-            case Bignumber:
-                writeValBignum(cfg,sBuf,v.getRawBignumber());//添加对大数字的处理
-                break;
-
-            case Integer:
-                sBuf.append(v.getRawInteger());
-                break;
-
-            case Decimal:
-                sBuf.append(v.getRawDecimal());
+            case Number:
+                writeValNumber(ctx, sBuf, v.getRawNumber());
                 break;
 
             default:
@@ -127,121 +184,97 @@ public class JsonToer implements Toer {
         }
     }
 
-    private void writeName(Constants cfg, StringBuilder sBuf, String val) {
-        if (cfg.hasFeature(Feature.QuoteFieldNames)) {
-            if(cfg.hasFeature(Feature.UseSingleQuotes)){
-                sBuf.append("'").append(val).append("'");
-            }else {
-                sBuf.append("\"").append(val).append("\"");
+    private void writeName(Context ctx, StringBuilder sBuf, String val) {
+        if (ctx.options.hasFeature(Feature.QuoteFieldNames)) {
+            if (ctx.options.hasFeature(Feature.UseSingleQuotes)) {
+                sBuf.append("'");
+                writeString(ctx, sBuf, val, '\'');
+                sBuf.append("'");
+            } else {
+                sBuf.append("\"");
+                writeString(ctx, sBuf, val, '"');
+                sBuf.append("\"");
             }
         } else {
-            sBuf.append(val);
+            writeString(ctx, sBuf, val, '"');
         }
     }
 
-    private void writeValDate(Constants cfg, StringBuilder sBuf, Date val){
-        if(cfg.hasFeature(Feature.WriteDateUseTicks)){
+    private void writeValDate(Context ctx, StringBuilder sBuf, Date val) {
+        if (ctx.options.hasFeature(Feature.WriteDateUseTicks)) {
             sBuf.append(val.getTime());
-        }else if(cfg.hasFeature(Feature.WriteDateUseFormat)){
-            writeValString(cfg, sBuf, cfg.dateToString(val), false);
-        }else{
+        } else if (ctx.options.hasFeature(Feature.WriteDateUseFormat)) {
+            String valStr = DateUtil.format(val, ctx.options.getDateFormat(), ctx.options.getTimeZone());
+            writeValString(ctx, sBuf, valStr, false);
+        } else {
             sBuf.append("new Date(").append(val.getTime()).append(")");
         }
     }
 
-    private void writeValBool(Constants cfg, StringBuilder sBuf, Boolean val){
-        if(cfg.hasFeature(Feature.WriteBoolUse01)){
-            sBuf.append(val?1:0);
-        }else{
-            sBuf.append(val?"true":"false");
+    private void writeValBool(Context ctx, StringBuilder sBuf, Boolean val) {
+        if (ctx.options.hasFeature(Feature.WriteBoolUse01)) {
+            sBuf.append(val ? 1 : 0);
+        } else {
+            sBuf.append(val ? "true" : "false");
         }
     }
 
-    private void writeValBignum(Constants cfg, StringBuilder sBuf, Number val){
-        String sVal = val.toString();
+    private void writeValNumber(Context ctx, StringBuilder sBuf, Number val) {
 
-        if(val instanceof BigInteger){
+        if (val instanceof BigInteger) {
             BigInteger v = (BigInteger) val;
-            //数字太大时，可用string来表示；
-            if(sVal.length()>16 && ( v.compareTo(TypeUtil.INT_LOW)<0 || v.compareTo(TypeUtil.INT_HIGH)>0) && cfg.hasFeature(Feature.BrowserCompatible)) {
-                writeValString(cfg, sBuf, sVal, false);
-            }else{
-                sBuf.append(sVal);
+            String sVal = v.toString();
+
+            if (ctx.options.hasFeature(Feature.WriteNumberUseString)) {
+                writeValString(ctx, sBuf, sVal, false);
+            } else {
+                //数字太大时，可用string来表示；
+                if (sVal.length() > 16 && (v.compareTo(TypeUtil.INT_LOW) < 0 || v.compareTo(TypeUtil.INT_HIGH) > 0) && ctx.options.hasFeature(Feature.BrowserCompatible)) {
+                    writeValString(ctx, sBuf, sVal, false);
+                } else {
+                    sBuf.append(sVal);
+                }
             }
             return;
         }
 
-        if(val instanceof BigDecimal){
+        if (val instanceof BigDecimal) {
             BigDecimal v = (BigDecimal) val;
-            //数字太大时，可用string来表示；
-            if(sVal.length()>16 && ( v.compareTo(TypeUtil.DEC_LOW)<0 || v.compareTo(TypeUtil.DEC_HIGH)>0) && cfg.hasFeature(Feature.BrowserCompatible)) {
-                writeValString(cfg, sBuf, sVal, false);
-            }else{
-                sBuf.append(sVal);
+            String sVal = v.toPlainString();
+
+            if (ctx.options.hasFeature(Feature.WriteNumberUseString)) {
+                writeValString(ctx, sBuf, sVal, false);
+            } else {
+                //数字太大时，可用string来表示；
+                if (sVal.length() > 16 && (v.compareTo(TypeUtil.DEC_LOW) < 0 || v.compareTo(TypeUtil.DEC_HIGH) > 0) && ctx.options.hasFeature(Feature.BrowserCompatible)) {
+                    writeValString(ctx, sBuf, sVal, false);
+                } else {
+                    sBuf.append(sVal);
+                }
             }
             return;
         }
 
-        sBuf.append(sVal);
+        if (ctx.options.hasFeature(Feature.WriteNumberUseString)) {
+            writeValString(ctx, sBuf, val.toString(), false);
+        } else {
+            sBuf.append(val.toString());
+        }
     }
 
-    private void writeValString(Constants cfg, StringBuilder sBuf, String val, boolean isStr) {
+    /**
+     * @param isStr 是否为真实字符串
+     */
+    private void writeValString(Context ctx, StringBuilder sBuf, String val, boolean isStr) {
         //引号开始
-        boolean useSingleQuotes = cfg.hasFeature(Feature.UseSingleQuotes);
+        boolean useSingleQuotes = ctx.options.hasFeature(Feature.UseSingleQuotes);
         char quote = (useSingleQuotes ? '\'' : '\"');
         sBuf.append(quote);
 
 
         //内容
         if (isStr) {
-            boolean isCompatible = cfg.hasFeature(Feature.BrowserCompatible);
-            boolean isSecure = cfg.hasFeature(Feature.BrowserSecure);
-            for (int i = 0, len = val.length(); i < len; i++) {
-                char c = val.charAt(i);
-
-                //引号转义处理 + 特殊字符必须码
-                if (c == quote || c == '\\' || c == '\n' || c == '\r' || c == '\t' || c == '\f' || c == '\b' || (c>='\0' && c<='\7')) {
-                    sBuf.append("\\");
-                    sBuf.append(IOUtil.CHARS_MARK[(int)c]);
-                    continue;
-                }
-                if (isSecure) {
-                    if (c == '(' || c == ')' || c == '<' || c == '>') {
-                        sBuf.append('\\');
-                        sBuf.append('u');
-                        sBuf.append(IOUtil.DIGITS[(c >>> 12) & 15]);
-                        sBuf.append(IOUtil.DIGITS[(c >>> 8) & 15]);
-                        sBuf.append(IOUtil.DIGITS[(c >>> 4) & 15]);
-                        sBuf.append(IOUtil.DIGITS[c & 15]);
-                        continue;
-                    }
-                }
-
-                if (isCompatible) {
-                    //对不可见ASC码，进行编码处理
-                    if (c < 32) {
-                        sBuf.append('\\');
-                        sBuf.append('u');
-                        sBuf.append('0');
-                        sBuf.append('0');
-                        sBuf.append(IOUtil.DIGITS[(c >>> 4) & 15]);
-                        sBuf.append(IOUtil.DIGITS[c & 15]);
-                        continue;
-                    }
-                    //对大码，进行编码处理
-                    if (c >= 127) {
-                        sBuf.append('\\');
-                        sBuf.append('u');
-                        sBuf.append(IOUtil.DIGITS[(c >>> 12) & 15]);
-                        sBuf.append(IOUtil.DIGITS[(c >>> 8) & 15]);
-                        sBuf.append(IOUtil.DIGITS[(c >>> 4) & 15]);
-                        sBuf.append(IOUtil.DIGITS[c & 15]);
-                        continue;
-                    }
-                }
-
-                sBuf.append(c);
-            }
+            writeString(ctx,sBuf,val, quote);
         } else {
             //非字符串直接添加
             sBuf.append(val);
@@ -249,5 +282,79 @@ public class JsonToer implements Toer {
 
         //引号结束
         sBuf.append(quote);
+    }
+
+    private void writeString(Context ctx, StringBuilder sBuf, String val, char quote) {
+        boolean isCompatible = ctx.options.hasFeature(Feature.BrowserCompatible);
+        boolean isSecure = ctx.options.hasFeature(Feature.BrowserSecure);
+        boolean isTransfer = ctx.options.hasFeature(Feature.TransferCompatible);
+
+        for (int i = 0, len = val.length(); i < len; i++) {
+            char c = val.charAt(i);
+
+            if(c >= '\0' && c <= '\7'){
+                sBuf.append("\\u000");
+                sBuf.append(IOUtil.CHARS_MARK[(int) c]);
+                continue;
+            }
+
+            //引号转义处理 + 特殊字符必须码 // 去掉 c == '\\' ,不然 "\a" 会变成 "\\a" //移到 isCompatible
+            if (c == quote || c == '\n' || c == '\r' || c == '\t' || c == '\f' || c == '\b') {
+                sBuf.append("\\");
+                sBuf.append(IOUtil.CHARS_MARK[(int) c]);
+                continue;
+            }
+
+            if (isSecure) {
+                if (c == '(' || c == ')' || c == '<' || c == '>') {
+                    sBuf.append('\\');
+                    sBuf.append('u');
+                    sBuf.append(IOUtil.DIGITS[(c >>> 12) & 15]);
+                    sBuf.append(IOUtil.DIGITS[(c >>> 8) & 15]);
+                    sBuf.append(IOUtil.DIGITS[(c >>> 4) & 15]);
+                    sBuf.append(IOUtil.DIGITS[c & 15]);
+                    continue;
+                }
+            }
+
+            if (isTransfer) {
+                if (c == '\\') {
+                    sBuf.append("\\");
+                    sBuf.append(IOUtil.CHARS_MARK[(int) c]);
+                    continue;
+                }
+            }
+
+            if (isCompatible) {
+                if (c == '\\') {
+                    sBuf.append("\\");
+                    sBuf.append(IOUtil.CHARS_MARK[(int) c]);
+                    continue;
+                }
+
+                //对不可见ASC码，进行编码处理
+                if (c < 32) {
+                    sBuf.append('\\');
+                    sBuf.append('u');
+                    sBuf.append('0');
+                    sBuf.append('0');
+                    sBuf.append(IOUtil.DIGITS[(c >>> 4) & 15]);
+                    sBuf.append(IOUtil.DIGITS[c & 15]);
+                    continue;
+                }
+                //对大码，进行编码处理
+                if (c >= 127) {
+                    sBuf.append('\\');
+                    sBuf.append('u');
+                    sBuf.append(IOUtil.DIGITS[(c >>> 12) & 15]);
+                    sBuf.append(IOUtil.DIGITS[(c >>> 8) & 15]);
+                    sBuf.append(IOUtil.DIGITS[(c >>> 4) & 15]);
+                    sBuf.append(IOUtil.DIGITS[c & 15]);
+                    continue;
+                }
+            }
+
+            sBuf.append(c);
+        }
     }
 }

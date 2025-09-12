@@ -1,9 +1,9 @@
 package features;
 
 import _models.UserModel;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 import org.noear.snack.ONode;
-import org.noear.snack.core.Constants;
+import org.noear.snack.core.Options;
 import org.noear.snack.core.Feature;
 
 import java.util.ArrayList;
@@ -55,8 +55,6 @@ public class _test {
         String str = "{\"g_udid\":\"1EFB07BFE0D98F8BF9EAF276C92C95FA4BEA3423\",\"g_imid\":\"864499040824376\",\"g_lkey\":\"d359a30a239e9e17daa8f8367ef35422\",\"g_encode\":\"1\",\"g_time\":1572511666,\"g_platform\":\"Android\",\"g_system\":\"8.1.0\",\"g_model\":\"PACM00\",\"g_brand\":\"OPPO\"}";
         ONode n = ONode.load(str);
 
-        n.readonly(true);
-
         String g_lkey = n.get("g_lkey").getString();
         long g_time = n.get("g_time").getLong();
         int g_encode = n.get("g_encode").getInt();
@@ -80,14 +78,14 @@ public class _test {
 
     @Test
     public void test2() {
-        ONode n = new ONode(); //默认,null string 为 空字符
+        ONode n = new ONode().options(opt->opt.add(Feature.StringNullAsEmpty)); //默认,null string 为 空字符
 
         assert "".equals(n.getString());
     }
 
     @Test
     public void test3() {
-        ONode n = new ONode(Constants.of()); //空特性，什么都没有
+        ONode n = new ONode(Options.of()); //空特性，什么都没有
 
         assert "".equals(n.getString()) == false;
     }
@@ -106,8 +104,8 @@ public class _test {
         list.add(u2);
 
 
-        ONode o = ONode.load("{code:1,msg:'succeed'}",  Constants.serialize());//当toJson(),会产生@type
-        o.get("data").get("list").fill(list);
+        ONode o = ONode.load("{code:1,msg:'succeed'}",  Options.serialize());//当toJson(),会产生@type
+        o.getOrNew("data").getOrNew("list").fill(list);
 
         assert o.select("data.list").count() == 2;
 
@@ -118,6 +116,19 @@ public class _test {
         System.out.println(message);
 
         assert message != null;
+    }
+
+    @Test
+    public void test4_2() {
+        Map<String, Object> map = new HashMap<>();
+        map.put("a", 1);
+        map.put("b", "1");
+
+        ONode oNode = new ONode();
+
+        oNode.getNew("test").fill(map);
+
+        assert oNode.get("test").isObject();
     }
 
     @Test
@@ -135,7 +146,7 @@ public class _test {
 
 
         ONode o = ONode.load("{code:1,msg:'succeed'}"); //当toJson(),不会产生@type
-        o.get("data").get("list").fill(list);
+        o.getOrNew("data").getOrNew("list").fill(list);
 
         assert o.select("data.list").count() == 2;
 
@@ -204,7 +215,7 @@ public class _test {
         String txt = "{id:1,name:'x'}";
         ONode tmp = ONode.load(txt);
 
-        tmp.cfg().sub(Feature.QuoteFieldNames) //取消字段引号
+        tmp.options().remove(Feature.QuoteFieldNames) //取消字段引号
                  .add(Feature.UseSingleQuotes); //采用单引号
 
         String txt2 = tmp.toJson();
@@ -214,7 +225,7 @@ public class _test {
 
     @Test
     public void test11(){
-        ONode tmp = ONode.loadObj("46qh", Constants.serialize().sub(Feature.BrowserCompatible));
+        ONode tmp = ONode.loadObj("46qh", Options.serialize().remove(Feature.BrowserCompatible));
 
         assert "46qh".equals(tmp.val().getString());
     }

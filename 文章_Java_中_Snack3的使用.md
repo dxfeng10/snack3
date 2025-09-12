@@ -1,15 +1,14 @@
-# Java 中 Snack3的使用
-> 网上看了一篇Java 中 Gson的使用，所以也跟着写篇Java 中 Snack3的使用
+# Java 中 Snack3 的使用
 
 JSON 是一种文本形式的数据交换格式，从Ajax的时候开始流行，它比XML更轻量、比二进制容易阅读和编写；解析和生成的方式很多，Java中最常用的类库有：JSON-Java、Gson、Jackson、FastJson、Snack3等。
 
-Snack3 基于jdk8，60kb大小，非常小巧。
+Snack3 基于jdk8，80kb大小，非常小巧。
 
 ```xml
 <dependency>
   <groupId>org.noear</groupId>
   <artifactId>snack3</artifactId>
-  <version>3.1.11</version>
+  <version>3.2.139</version>
 </dependency>
 ```
 
@@ -20,7 +19,7 @@ Snack3 借鉴了 `Javascript` 所有变量由 `var` 申明，及 `Xml dom` 一�
 - 高性能`Json path`查询（兼容性和性能很赞）
 - 支持`序列化、反序列化`
 
-### 一、Snack3的基本用法
+### 一、Snack3 的基本用法
 
 `Snack3`提供了几个快捷函数：
 
@@ -70,7 +69,7 @@ User user = ONode.deserialize(json, User.class);//JSON反序列化
 
 ### 二、序列化事项补充说明
 
-从上面示例可以看出json的字段和值是的名称和类型是一一对应的，Snack3不支持直接改名称，但可以通过`transient`关键字进行排序，例：
+从上面示例可以看出json的字段和值是的名称和类型是一一对应的，Snack3不支持直接改名称，但可以通过`transient`关键字进行排除，例：
 ```java
 public class User {
     public String name;
@@ -96,11 +95,11 @@ Snack3在序列化和反序列化时需要使用反射，且只对字段进行�
 ###### 特性总结：
 
 * 只对字段进行序列化（包括私有）
-* 使用`transient` 对字段排序
-* 加载后可进行重命名字段
+* 使用`transient` 对字段排除
+* 加载后可进行修改（重命名，改值，删除）
 
 
-### 三、Snack3中使用泛型
+### 三、Snack3 中使用泛型
 
 例如：JSON字符串数组：`["Android","Java","PHP"]`
 
@@ -118,11 +117,11 @@ String[] strings = ONode.deserialize(jsonArray,String[].class);
 
 ```java
 String jsonArray = "[\"Android\",\"Java\",\"PHP\"]";
-ONode ary0 			  = ONode.load(jsonArray);
+ONode ary0 		  = ONode.load(jsonArray);
 List<String> ary1 = ONode.deserialize(jsonArray,(new ArrayList<String>(){}).getClass());
 List<String> ary2 = ONode.deserialize(jsonArray,(new TypeRef<List<String>>(){}).getClass());
 
-//(new ArrayList<String>(){}).getClass() 			//方式1，通过临时类形（最终都是产生Class）
+//(new ArrayList<String>(){}).getClass() 	    //方式1，通过临时类形（最终都是产生Class）
 //(new TypeRef<List<String>>(){}).getClass() 	//方式2，通过TypeRef（最终都是产生Class）
 ```
 
@@ -151,9 +150,9 @@ public class Result<T> {
 } 
 ```
 
-### 四、Snack3的序列化与反序列化
+### 四、Snack3 的序列化与反序列化
 
-####（1）自动方式
+#### （1）自动方式
 Snack3提供了`serialize(obj)`和`deserialize(str,clz)` 前者实现序列化，后者实现了反序列化。
 ```java
 ONode.serialize(obj);       //序列化
@@ -166,10 +165,10 @@ ONode.deserialize(str,clz); //反序列化
 String json = "{\"name\":\"张三\",\"age\":\"24\"}";
 
 //反序列化
-User user = ONode.load(json,Constants.serialize()).toObject(User.class);
+User user = ONode.load(json,Options.serialize()).toObject(User.class);
 
 //序列化
-ONode.load(user,Constants.serialize()).toJson();
+ONode.load(user,Options.serialize()).toJson();
 ```
 
 自动方式最终都是通过`load(obj)`,`toObject(clz)`,`toJson()` 进行操作。
@@ -185,7 +184,7 @@ ONode.load(user,Constants.serialize()).toJson();
  */
 public static String serialize(Object source) {
     //加载java object，须指定Fromer
-    return load(source, Constants.serialize(), DEFAULTS.DEF_OBJECT_FROMER).toJson();
+    return load(source, Options.serialize(), DEFAULTS.DEF_OBJECT_FROMER).toJson();
 }
 
 
@@ -197,41 +196,90 @@ public static String serialize(Object source) {
  */
 public static <T> T deserialize(String source, Class<?> clz) {
     //加载String，不需指定Fromer
-    return load(source,  Constants.serialize(), null).toObject(clz);
+    return load(source,  Options.serialize(), null).toObject(clz);
 }
 ```
 
-### 五、使用Snack3导出null值、格式化输出、日期时间
-一般情况下ONode类提供的 API已经能满足大部分的使用场景，但有时需要更多特殊、强大的功能时，这时候就引入一个新的类 Constants。
+#### (3)使用 ONodeAttr 定制
 
-Constants从名字上看它是一个提供配置的类，要想改变ONode默认的设置必须使用该类进行配置。用法：　
+定制枚举
+
 ```java
-Constants.of(..)                      //全新定义一份配置
-Constants.def().add(..).sub(..)       //在默认配置基础上，添加或减少特性
-Constants.serialize().add(..).sub(..) //在序列化配置基础上，添加或减少特性
+public enum BookType {
+    NOVEL(2,"小说"),
+    CLASSICS(3,"名著"),
+    ;
+
+    @ONodeAttr
+    public final int code; //使用 code 做为序列化的字段
+    public final String des;
+    BookType(int code, String des){this.code=code; this.des=des;}
+}
 ```
 
-#### （1）Snack3在默认情况下是不动导出值null的键的，如：
+定制实体
+
+```java
+public class Book {
+    String name;
+    
+    BookType type;
+    
+    @ONodeAttr(serialize=false)
+    String author;
+    
+    @ONodeAttr(format="yyyy-MM-dd")
+    Date releaseTime;
+}
+```
+
+### 五、使用 Snack3 的 Options 和 Feature
+一般情况下ONode类提供的 API已经能满足大部分的使用场景，但有时需要更多特殊、强大的功能时，这时候就引入一个新的类 Options 和 Feature。
+
+Options 从名字上看它是一个提供配置的类，要想改变ONode默认的设置必须使用该类进行配置。用法：　
+```java
+Options.of(..)                      //全新定义一份配置
+Options.def().add(..).sub(..)       //在默认配置基础上，添加或减少特性
+Options.serialize().add(..).sub(..) //在序列化配置基础上，添加或减少特性
+```
+
+#### （1）例：Snack3在默认情况下是不动导出值null的键的
 ```java
 User user = new User("张三", 24);
 System.out.println(ONode.stringify(user)); //{"name":"张三","age":24}
 
-
-Constants cfg = Constants.def().add(Feature.SerializeNulls); //导出null
+//使用 Options(支持高级定制)
+Options opts = Options.def().add(Feature.SerializeNulls); //导出null
 System.out.println(ONode.load(user, cfg).toJson()); //{"name":"张三","age":24,"emailAddress":null}
+
+//使用 Feature(快捷)
+System.out.println(ONode.load(user, Feature.SerializeNulls).toJson()); 
 ```
 
-#### （2）格式化输出、日期时间及其它：
+#### （2）例：自动解析 json 内的 json string
+
+```java
+String json = "{a:1,b:{l:'[{c:1},{c:2}]'}}";
+
+//使用 Options(支持高级定制)
+Options opts = Options.def().add(Feature.StringJsonToNode); //导出null
+System.out.println(ONode.load(json, cfg).toJson()); //{a:1,b:{l:[{c:1},{c:2}]}}
+
+//使用 Feature(快捷)
+System.out.println(ONode.load(user, Feature.StringJsonToNode).toJson()); 
+```
+
+#### （3）例：格式化输出、日期时间及其它（是用于输出的）
 ```java
 Date date = new Date();
 
-Constants cfg = Constants.of(Feature.WriteDateUseFormat) //使用格式化特性
-        .build(c-> c.date_format = new SimpleDateFormat("yyyy-MM-dd",c.locale)); //设置格式符（默认为："yyyy-MM-dd'T'HH:mm:ss"）
+Options cfg = Options.of(Feature.WriteDateUseFormat) //使用格式化特性（才会让下面的 setDateFormat 起效）
+        .build(c-> c.setDateFormat("yyyy-MM-dd")); //设置格式符（默认为："yyyy-MM-dd'T'HH:mm:ss"）;
 
 System.out.println(ONode.load(date, cfg).toJson()); //2019-12-06
 ```
 
-### 六、使用Snack3进行JSONPath查询
+### 六、使用 Snack3 进行 JSONPath 查询
 在网上找了一份经典的JSON样本：
 ```json
 {
@@ -257,7 +305,8 @@ System.out.println(ONode.load(date, cfg).toJson()); //2019-12-06
     }
 }
 ```
-Snack3可以提供高速的JSONPath查询，JSONPath更给日常的查询节省了大量代码：
+Snack3 可以提供高速的 JSONPath 查询，JSONPath 更给日常的查询节省了大量代码：
+
 ```java
 ONode o = ONode.load(jsonStr);
 
@@ -296,7 +345,7 @@ ONode read = o.select("$.store.bicycle['color','price']");
 System.out.println("bicycle的color和price属性值=::" + read);
 ```
 
-#### （1）支持的JSONPath语法
+#### （1）支持的 JSONPath 语法
 
 * 字符串使用单引号，例：\['name']
 * 过滤操作用空隔号隔开，例：\[?(@.type == 1)]
@@ -338,6 +387,7 @@ System.out.println("bicycle的color和price属性值=::" + read);
 ```java 
 $.store.book[0].title //建议使用这种
 ```
+
 ```java
 $['store']['book'][0]['title']
 ```
@@ -363,12 +413,12 @@ XmlFromer xmlFromer = new XmlFromer();
 YmalToer  ymalToer  = new YmalToer();
 
 //加载xml，输出ymal
-String ymal = ONode.load(xml,Constants.def(),xmlFromer).to(ymalToer);
+String ymal = ONode.load(xml,Options.def(),xmlFromer).to(ymalToer);
 ```
 
 #### （2）加载Xml，去掉手机号，转为java object
 ```java
-ONode tmp =ONode.load(xml,Constants.def(),xmlFromer);
+ONode tmp =ONode.load(xml,Options.def(),xmlFromer);
 
 //找到有手机号的，然后移除手机号
 tmp.select("$..[?(@.mobile)]").forEach(n->n.remove("mobile"));

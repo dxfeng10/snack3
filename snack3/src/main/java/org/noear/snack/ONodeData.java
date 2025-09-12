@@ -6,6 +6,8 @@ import java.util.*;
 
 /**
  * 节点数据
+ *
+ * @author noear
  * */
 public class ONodeData {
     /** 节点数据的 value */
@@ -75,7 +77,7 @@ public class ONodeData {
             nodeType = ONodeType.Object;
 
             if (object == null) {
-                if(_n._c.hasFeature(Feature.OrderedField)){
+                if(_n._o.hasFeature(Feature.OrderedField)){
                     object = new ONodeLinkedObject();
                 }else {
                     object = new ONodeObject();
